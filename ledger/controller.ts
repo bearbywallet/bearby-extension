@@ -7,7 +7,7 @@ import type { LedgerPublicAddress } from "types/ledger";
 import { ETHEREUM } from "config/slip44";
 import { hexToUint8Array } from "lib/utils/hex";
 import type { IChainConfigState } from "background/storage";
-import { utf8ToUint8Array } from "lib/utils/utf8";
+import { messageToUint8Array, utf8ToUint8Array } from "lib/utils/utf8";
 import type { EthSignature } from "./ethsig";
 
 export enum DeviceType {
@@ -205,6 +205,22 @@ class LedgerController {
     }
 
     throw new Error(LedgerError.UnsupportedOnEthApp);
+  }
+
+  async signEthMessage(message: string, accountIndex: number): Promise<string> {
+    this.#ensureConnected();
+
+    if (this.#interface instanceof EthLedgerInterface) {
+      const path = buildBip44Path(ETHEREUM, accountIndex);
+      const messageBytes = messageToUint8Array(message);
+      const signature = await this.#interface.signPersonalMessage(
+        path,
+        messageBytes,
+      );
+      return signature.toHex();
+    }
+
+    throw new Error(LedgerError.UnsupportedOnScillaApp);
   }
 
   async signTransaction(rlp: string[], accountIndex: number): Promise<string> {

@@ -5,7 +5,12 @@ import type { StreamResponse } from "lib/streem";
 import type { ConnectService } from "./connect";
 import type { ConnectParams } from "types/connect";
 import { NetworkProvider, type JsonRPCRequest } from "background/rpc";
-import { bigintToHex, HEX_PREFIX, hexToUint8Array, uint8ArrayToHex } from "lib/utils/hex";
+import {
+  bigintToHex,
+  HEX_PREFIX,
+  hexToUint8Array,
+  uint8ArrayToHex,
+} from "lib/utils/hex";
 import { tryHexToUtf8, messageToUint8Array } from "lib/utils/utf8";
 import { TabsMessage } from "lib/streem/tabs-message";
 import { MTypePopup } from "config/stream";
@@ -15,28 +20,39 @@ import { ConfirmState } from "background/storage/confirm";
 import { PromptService } from "lib/popup/prompt";
 import { AddressType, WalletTypes } from "config/wallet";
 import type { TransactionRequestEVM, TransactionMetadata } from "types/tx";
-import { ChainConfig, FToken, Explorer, type BackgroundState } from "background/storage";
+import {
+  ChainConfig,
+  FToken,
+  Explorer,
+  type BackgroundState,
+} from "background/storage";
 import type { ProviderService } from "./provider";
 import type { EvmAddChainParams } from "types/chain";
 import type { ParamsWatchAsset } from "types/token";
 import { eip191Signer, verifyTyped } from "micro-eth-signer";
-import { encoder, getDomainType } from 'micro-eth-signer/core/typed-data';
+import { encoder, getDomainType } from "micro-eth-signer/core/typed-data";
 import { Address } from "crypto/address";
 import { KeyPair } from "crypto/keypair";
-
 
 export class EvmService {
   #state: BackgroundState;
   #connectService: ConnectService;
   #provider: ProviderService;
 
-  constructor(state: BackgroundState, connectService: ConnectService, provider: ProviderService) {
+  constructor(
+    state: BackgroundState,
+    connectService: ConnectService,
+    provider: ProviderService,
+  ) {
     this.#state = state;
     this.#connectService = connectService;
     this.#provider = provider;
   }
 
-  async handleRequest(msg: ConnectParams<JsonRPCRequest>, sendResponse: StreamResponse) {
+  async handleRequest(
+    msg: ConnectParams<JsonRPCRequest>,
+    sendResponse: StreamResponse,
+  ) {
     const wallet = this.#state.getCurrentWallet();
 
     if (!wallet) {
@@ -55,50 +71,50 @@ export class EvmService {
 
       const account = wallet.accounts[wallet.selectedAccount];
       switch (payload.method) {
-        case 'eth_chainId':
+        case "eth_chainId":
           this.#handleChainId(msg, account);
           break;
 
-        case 'eth_accounts':
+        case "eth_accounts":
           this.#handleAccounts(msg, wallet, account);
           break;
 
-        case 'eth_requestAccounts':
+        case "eth_requestAccounts":
           await this.#connectService.callConnect(msg, sendResponse);
           return;
 
-        case 'wallet_requestPermissions':
+        case "wallet_requestPermissions":
           await this.#handleRequestPermissions(msg, sendResponse);
           return;
 
-        case 'wallet_getPermissions':
+        case "wallet_getPermissions":
           this.#handleGetPermissions(msg, account);
           break;
 
-        case 'wallet_switchEthereumChain':
-          await this.#handleSwitchChain(msg,sendResponse);
+        case "wallet_switchEthereumChain":
+          await this.#handleSwitchChain(msg, sendResponse);
           return;
 
-        case 'eth_sign':
+        case "eth_sign":
           await this.#handleEthSign(msg, wallet, sendResponse);
           return;
 
-        case 'personal_sign':
+        case "personal_sign":
           await this.#handlePersonalSign(msg, wallet, sendResponse);
           return;
 
-        case 'eth_signTypedData_v4':
+        case "eth_signTypedData_v4":
           await this.#handleSignTypedDataV4(msg, wallet, sendResponse);
           return;
 
-        case 'eth_sendTransaction':
+        case "eth_sendTransaction":
           await this.#handleSendTransaction(msg, wallet, sendResponse);
           return;
 
-        case 'wallet_addEthereumChain':
+        case "wallet_addEthereumChain":
           await this.#handleAddEthereumChain(msg, wallet, sendResponse);
           return;
-        case 'wallet_watchAsset':
+        case "wallet_watchAsset":
           await this.#handleWatchAsset(msg, wallet, sendResponse);
           return;
 
@@ -119,7 +135,7 @@ export class EvmService {
     uuid: string,
     walletIndex: number,
     approve: boolean,
-    sendResponse: StreamResponse
+    sendResponse: StreamResponse,
   ) {
     try {
       const wallet = this.#state.wallets[walletIndex];
@@ -144,7 +160,7 @@ export class EvmService {
       } else {
         const chainId = parseInt(chainParams.chainId, 16);
         const existingChain = this.#state.chains.find(
-          (c) => c.chainId === chainId
+          (c) => c.chainId === chainId,
         );
 
         if (existingChain) {
@@ -154,45 +170,56 @@ export class EvmService {
             ];
           }
           if (chainParams.blockExplorerUrls) {
-            const existingExplorerUrls = new Set(existingChain.explorers.map(e => e.url));
+            const existingExplorerUrls = new Set(
+              existingChain.explorers.map((e) => e.url),
+            );
             const newExplorers = chainParams.blockExplorerUrls
-              .filter(url => !existingExplorerUrls.has(url))
-              .map(url => new Explorer({
-                name: new URL(url).hostname,
-                url,
-                icon: null,
-                standard: 3091
-              }));
+              .filter((url) => !existingExplorerUrls.has(url))
+              .map(
+                (url) =>
+                  new Explorer({
+                    name: new URL(url).hostname,
+                    url,
+                    icon: null,
+                    standard: 3091,
+                  }),
+              );
             existingChain.explorers.push(...newExplorers);
           }
         } else {
           const newChainData = new ChainConfig({
             name: chainParams.chainName,
             chain: chainParams.nativeCurrency.symbol,
-            logo: chainParams.iconUrls?.[0] || 'https://raw.githubusercontent.com/zilpay/tokens_meta/refs/heads/master/ft/%{shortName}%/chain/%{dark,light}%.svg',
+            logo:
+              chainParams.iconUrls?.[0] ||
+              "https://raw.githubusercontent.com/zilpay/tokens_meta/refs/heads/master/ft/%{shortName}%/chain/%{dark,light}%.svg",
             rpc: chainParams.rpcUrls,
             features: [],
             ftokens: [],
             chainId: chainId,
             chainIds: [chainId, 0],
-            shortName: chainParams.chainName.toLowerCase().replace(/\s/g, ''),
+            shortName: chainParams.chainName.toLowerCase().replace(/\s/g, ""),
             slip44: ETHEREUM,
-            explorers: chainParams.blockExplorerUrls?.map(url => (new Explorer({
-              name: new URL(url).hostname,
-              url,
-              icon: null,
-              standard: 3091
-            }))) || [],
+            explorers:
+              chainParams.blockExplorerUrls?.map(
+                (url) =>
+                  new Explorer({
+                    name: new URL(url).hostname,
+                    url,
+                    icon: null,
+                    standard: 3091,
+                  }),
+              ) || [],
             diffBlockTime: 15,
             ens: null,
             fallbackEnabled: true,
             batchRequest: true,
-            testnet: null
+            testnet: null,
           });
           const token = new FToken({
             native: true,
             logo: "https://raw.githubusercontent.com/zilpay/tokens_meta/refs/heads/master/ft/%{name}%/%{contract_address}%/%{dark,light}%.webp",
-            addr: '0x0000000000000000000000000000000000000000',
+            addr: "0x0000000000000000000000000000000000000000",
             name: chainParams.nativeCurrency.name,
             symbol: chainParams.nativeCurrency.symbol,
             decimals: chainParams.nativeCurrency.decimals,
@@ -218,7 +245,7 @@ export class EvmService {
 
   async #handleSwitchChain(
     msg: ConnectParams<JsonRPCRequest>,
-    sendResponse: StreamResponse
+    sendResponse: StreamResponse,
   ) {
     try {
       if (!msg.payload) {
@@ -227,7 +254,7 @@ export class EvmService {
 
       interface Params {
         method: string;
-        params: { chainId: string; }[];
+        params: { chainId: string }[];
       }
 
       const { params } = msg.payload as Params;
@@ -238,13 +265,19 @@ export class EvmService {
 
       const chainIdHex = params[0].chainId;
       const chainId = parseInt(chainIdHex, 16);
-      const chainIndex = this.#state.chains.findIndex((c) => c.chainId == chainId);
+      const chainIndex = this.#state.chains.findIndex(
+        (c) => c.chainId == chainId,
+      );
 
       if (chainIndex == -1) {
         throw new Error(ConnectError.ChainNotFound);
       }
 
-      await this.#provider.swichNetwork(this.#state.selectedWallet, chainIndex, sendResponse);
+      await this.#provider.swichNetwork(
+        this.#state.selectedWallet,
+        chainIndex,
+        sendResponse,
+      );
       this.#sendSuccess(msg.uuid, msg.domain, null);
     } catch (error) {
       this.#sendError(msg.uuid, msg.domain, String(error), 4902);
@@ -256,7 +289,7 @@ export class EvmService {
     uuid: string,
     walletIndex: number,
     approve: boolean,
-    sendResponse: StreamResponse
+    sendResponse: StreamResponse,
   ) {
     try {
       const wallet = this.#state.wallets[walletIndex];
@@ -273,7 +306,7 @@ export class EvmService {
       }
 
       const domain = confirmRequest.metadata!.domain!;
-      
+
       wallet.confirm = wallet.confirm.filter((c) => c.uuid !== uuid);
 
       if (approve) {
@@ -282,13 +315,13 @@ export class EvmService {
         const tokenExists = wallet.tokens.some(
           (token) =>
             token.addr.toLowerCase() === tokenToAdd.addr.toLowerCase() &&
-            token.chainHash === tokenToAdd.chainHash
+            token.chainHash === tokenToAdd.chainHash,
         );
 
         if (!tokenExists) {
           wallet.tokens.push(tokenToAdd);
         }
-        
+
         this.#sendSuccess(uuid, domain, true);
       } else {
         this.#sendError(uuid, domain, ConnectError.UserRejected, 4001);
@@ -296,7 +329,6 @@ export class EvmService {
 
       await this.#state.sync();
       sendResponse({ resolve: wallet.confirm });
-
     } catch (e) {
       sendResponse({ reject: String(e) });
     }
@@ -327,7 +359,12 @@ export class EvmService {
       }
 
       if (!approve) {
-        this.#sendError(uuid, evmMessage.signMessageEVM.domain, ConnectError.UserRejected, 4001);
+        this.#sendError(
+          uuid,
+          evmMessage.signMessageEVM.domain,
+          ConnectError.UserRejected,
+          4001,
+        );
       } else {
         const defaultChain = this.#state.getChain(wallet.defaultChainHash);
 
@@ -338,16 +375,34 @@ export class EvmService {
         let signature: string;
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
+          const messageBytes = messageToUint8Array(
+            evmMessage.signMessageEVM.messageHash,
+          );
+          let verify = eip191Signer.verify(sig, messageBytes, account.addr);
+          if (!verify) {
+            throw new Error(ConnectError.InvalidSig);
+          }
           signature = sig;
         } else {
-          const nativeKeyPair = await wallet.revealKeypair(account.index, defaultChain);
-          const keyPair = await KeyPair.fromPrivateKey(nativeKeyPair.privateKey, ETHEREUM);
-          const derivedAddr = await Address.fromPubKeyType(keyPair.pubKey, account.addrType);
+          const nativeKeyPair = await wallet.revealKeypair(
+            account.index,
+            defaultChain,
+          );
+          const keyPair = await KeyPair.fromPrivateKey(
+            nativeKeyPair.privateKey,
+            ETHEREUM,
+          );
+          const derivedAddr = await Address.fromPubKeyType(
+            keyPair.pubKey,
+            account.addrType,
+          );
           const addr = await derivedAddr.autoFormat();
           if (!account.addr.includes(addr)) {
             throw new Error(ConnectError.AddressMismatch);
           }
-          const hashBuffer = hexToUint8Array(evmMessage.signMessageEVM.messageHash);
+          const hashBuffer = messageToUint8Array(
+            evmMessage.signMessageEVM.messageHash,
+          );
           const s = await keyPair.signMessage(hashBuffer);
           signature = uint8ArrayToHex(s, true);
         }
@@ -355,7 +410,7 @@ export class EvmService {
         this.#sendSuccess(uuid, evmMessage.signMessageEVM.domain, signature);
       }
 
-      wallet.confirm = wallet.confirm.filter(c => c.uuid !== uuid);
+      wallet.confirm = wallet.confirm.filter((c) => c.uuid !== uuid);
       await this.#state.sync();
       sendResponse({ resolve: wallet.confirm });
     } catch (e) {
@@ -388,7 +443,12 @@ export class EvmService {
       }
 
       if (!approve) {
-        this.#sendError(uuid, evmMessage.signPersonalMessageEVM.domain, ConnectError.UserRejected, 4001);
+        this.#sendError(
+          uuid,
+          evmMessage.signPersonalMessageEVM.domain,
+          ConnectError.UserRejected,
+          4001,
+        );
       } else {
         const defaultChain = this.#state.getChain(wallet.defaultChainHash);
 
@@ -398,7 +458,9 @@ export class EvmService {
 
         let signature: string;
 
-        const messageBytes = messageToUint8Array(evmMessage.signPersonalMessageEVM.message);
+        const messageBytes = messageToUint8Array(
+          evmMessage.signPersonalMessageEVM.message,
+        );
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
           let verify = eip191Signer.verify(sig, messageBytes, account.addr);
@@ -407,9 +469,18 @@ export class EvmService {
           }
           signature = sig;
         } else {
-          const nativeKeyPair = await wallet.revealKeypair(account.index, defaultChain);
-          const keyPair = await KeyPair.fromPrivateKey(nativeKeyPair.privateKey, ETHEREUM);
-          const derivedAddr = await Address.fromPubKeyType(keyPair.pubKey, account.addrType);
+          const nativeKeyPair = await wallet.revealKeypair(
+            account.index,
+            defaultChain,
+          );
+          const keyPair = await KeyPair.fromPrivateKey(
+            nativeKeyPair.privateKey,
+            ETHEREUM,
+          );
+          const derivedAddr = await Address.fromPubKeyType(
+            keyPair.pubKey,
+            account.addrType,
+          );
           const addr = await derivedAddr.autoFormat();
           if (!account.addr.includes(addr)) {
             throw new Error(ConnectError.AddressMismatch);
@@ -418,10 +489,14 @@ export class EvmService {
           signature = uint8ArrayToHex(s, true);
         }
 
-        this.#sendSuccess(uuid, evmMessage.signPersonalMessageEVM.domain, signature);
+        this.#sendSuccess(
+          uuid,
+          evmMessage.signPersonalMessageEVM.domain,
+          signature,
+        );
       }
 
-      wallet.confirm = wallet.confirm.filter(c => c.uuid !== uuid);
+      wallet.confirm = wallet.confirm.filter((c) => c.uuid !== uuid);
       await this.#state.sync();
       sendResponse({ resolve: wallet.confirm });
     } catch (e) {
@@ -454,7 +529,12 @@ export class EvmService {
       }
 
       if (!approve) {
-        this.#sendError(uuid, evmTypedData.signTypedDataJsonEVM.domain, ConnectError.UserRejected, 4001);
+        this.#sendError(
+          uuid,
+          evmTypedData.signTypedDataJsonEVM.domain,
+          ConnectError.UserRejected,
+          4001,
+        );
       } else {
         const defaultChain = this.#state.getChain(wallet.defaultChainHash);
 
@@ -465,29 +545,46 @@ export class EvmService {
         let signature: string;
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
-          const typedData = JSON.parse(evmTypedData.signTypedDataJsonEVM.typedData);
+          const typedData = JSON.parse(
+            evmTypedData.signTypedDataJsonEVM.typedData,
+          );
           const verify = verifyTyped(sig, typedData, account.addr);
           if (!verify) {
             throw new Error(ConnectError.InvalidSig);
           }
           signature = sig;
         } else {
-          const nativeKeyPair = await wallet.revealKeypair(account.index, defaultChain);
-          const keyPair = await KeyPair.fromPrivateKey(nativeKeyPair.privateKey, ETHEREUM);
-          const derivedAddr = await Address.fromPubKeyType(keyPair.pubKey, account.addrType);
+          const nativeKeyPair = await wallet.revealKeypair(
+            account.index,
+            defaultChain,
+          );
+          const keyPair = await KeyPair.fromPrivateKey(
+            nativeKeyPair.privateKey,
+            ETHEREUM,
+          );
+          const derivedAddr = await Address.fromPubKeyType(
+            keyPair.pubKey,
+            account.addrType,
+          );
           const addr = await derivedAddr.autoFormat();
           if (!account.addr.includes(addr)) {
             throw new Error(ConnectError.AddressMismatch);
           }
-          const typedData = JSON.parse(evmTypedData.signTypedDataJsonEVM.typedData);
+          const typedData = JSON.parse(
+            evmTypedData.signTypedDataJsonEVM.typedData,
+          );
           const s = keyPair.signDataEIP712(typedData);
           signature = uint8ArrayToHex(s, true);
         }
 
-        this.#sendSuccess(uuid, evmTypedData.signTypedDataJsonEVM.domain, signature);
+        this.#sendSuccess(
+          uuid,
+          evmTypedData.signTypedDataJsonEVM.domain,
+          signature,
+        );
       }
 
-      wallet.confirm = wallet.confirm.filter(c => c.uuid !== uuid);
+      wallet.confirm = wallet.confirm.filter((c) => c.uuid !== uuid);
 
       await this.#state.sync();
       sendResponse({ resolve: wallet.confirm });
@@ -499,7 +596,7 @@ export class EvmService {
   async #handleEthSign(
     msg: ConnectParams<JsonRPCRequest>,
     wallet: Wallet,
-    sendResponse: StreamResponse
+    sendResponse: StreamResponse,
   ) {
     try {
       const params = msg.payload?.params;
@@ -512,24 +609,30 @@ export class EvmService {
       const messageHash = String(params[1]);
 
       const account = wallet.accounts[wallet.selectedAccount];
-      const currentAddress = account.slip44 === ZILLIQA
-        ? account.addr.split(":").at(-1)
-        : account.addr;
+      const currentAddress =
+        account.slip44 === ZILLIQA
+          ? account.addr.split(":").at(-1)
+          : account.addr;
 
-      if (!currentAddress || currentAddress?.toLowerCase() !== address.toLowerCase()) {
+      if (
+        !currentAddress ||
+        currentAddress?.toLowerCase() !== address.toLowerCase()
+      ) {
         throw new Error(ConnectError.AddressMismatch);
       }
 
-      wallet.confirm.push(new ConfirmState({
-        uuid: msg.uuid,
-        signMessageEVM: {
-          messageHash,
-          address: currentAddress,
-          domain: msg.domain,
-          title: msg.title || msg.domain,
-          icon: msg.icon || '',
-        },
-      }));
+      wallet.confirm.push(
+        new ConfirmState({
+          uuid: msg.uuid,
+          signMessageEVM: {
+            messageHash,
+            address: currentAddress,
+            domain: msg.domain,
+            title: msg.title || msg.domain,
+            icon: msg.icon || "",
+          },
+        }),
+      );
 
       await this.#state.sync();
       new PromptService().open("/sign-message");
@@ -545,7 +648,7 @@ export class EvmService {
   async #handlePersonalSign(
     msg: ConnectParams<JsonRPCRequest>,
     wallet: Wallet,
-    sendResponse: StreamResponse
+    sendResponse: StreamResponse,
   ) {
     try {
       const params = msg.payload?.params;
@@ -564,24 +667,30 @@ export class EvmService {
       }
 
       const account = wallet.accounts[wallet.selectedAccount];
-      const currentAddress = account.slip44 === ZILLIQA
-        ? account.addr.split(":").at(-1)
-        : account.addr;
+      const currentAddress =
+        account.slip44 === ZILLIQA
+          ? account.addr.split(":").at(-1)
+          : account.addr;
 
-      if (!currentAddress || currentAddress?.toLowerCase() !== address.toLowerCase()) {
+      if (
+        !currentAddress ||
+        currentAddress?.toLowerCase() !== address.toLowerCase()
+      ) {
         throw new Error(ConnectError.AddressMismatch);
       }
 
-      wallet.confirm.push(new ConfirmState({
-        uuid: msg.uuid,
-        signPersonalMessageEVM: {
-          message,
-          address: currentAddress,
-          domain: msg.domain,
-          title: msg.title || msg.domain,
-          icon: msg.icon || '',
-        },
-      }));
+      wallet.confirm.push(
+        new ConfirmState({
+          uuid: msg.uuid,
+          signPersonalMessageEVM: {
+            message,
+            address: currentAddress,
+            domain: msg.domain,
+            title: msg.title || msg.domain,
+            icon: msg.icon || "",
+          },
+        }),
+      );
 
       await this.#state.sync();
       new PromptService().open("/sign-message");
@@ -596,7 +705,7 @@ export class EvmService {
   async #handleSignTypedDataV4(
     msg: ConnectParams<JsonRPCRequest>,
     wallet: Wallet,
-    sendResponse: StreamResponse
+    sendResponse: StreamResponse,
   ) {
     try {
       const params = msg.payload?.params;
@@ -617,24 +726,29 @@ export class EvmService {
       const domainTypes = getDomainType(typedData.domain);
       const types = {
         EIP712Domain: domainTypes,
-        ...typedData.types
+        ...typedData.types,
       };
       const enc = encoder(types, typedData.domain);
-      const hashStructMessage = enc.structHash(typedData.primaryType, typedData.message);
-      const domainSeparator = enc.structHash('EIP712Domain', typedData.domain);
+      const hashStructMessage = enc.structHash(
+        typedData.primaryType,
+        typedData.message,
+      );
+      const domainSeparator = enc.structHash("EIP712Domain", typedData.domain);
 
-      wallet.confirm.push(new ConfirmState({
-        uuid: msg.uuid,
-        signTypedDataJsonEVM: {
-          domainSeparator,
-          hashStructMessage,
-          typedData: typedDataJson,
-          address: account.addr,
-          domain: msg.domain,
-          title: msg.title || msg.domain,
-          icon: msg.icon || '',
-        },
-      }));
+      wallet.confirm.push(
+        new ConfirmState({
+          uuid: msg.uuid,
+          signTypedDataJsonEVM: {
+            domainSeparator,
+            hashStructMessage,
+            typedData: typedDataJson,
+            address: account.addr,
+            domain: msg.domain,
+            title: msg.title || msg.domain,
+            icon: msg.icon || "",
+          },
+        }),
+      );
 
       await this.#state.sync();
       new PromptService().open("/sign-message");
@@ -649,7 +763,7 @@ export class EvmService {
   async #handleSendTransaction(
     msg: ConnectParams<JsonRPCRequest>,
     wallet: Wallet,
-    sendResponse: StreamResponse
+    sendResponse: StreamResponse,
   ) {
     try {
       const params = msg.payload?.params;
@@ -666,11 +780,15 @@ export class EvmService {
         throw new Error(ConnectError.ChainNotFound);
       }
 
-      const currentAddress = account.slip44 === ZILLIQA 
-        ? account.addr.split(":").at(-1)
-        : account.addr;
+      const currentAddress =
+        account.slip44 === ZILLIQA
+          ? account.addr.split(":").at(-1)
+          : account.addr;
 
-      if (txParams.from && !currentAddress?.toLowerCase().includes(txParams.from.toLowerCase())) {
+      if (
+        txParams.from &&
+        !currentAddress?.toLowerCase().includes(txParams.from.toLowerCase())
+      ) {
         throw new Error(ConnectError.AddressMismatch);
       }
 
@@ -682,18 +800,20 @@ export class EvmService {
         token: {
           ...chainConfig.ftokens[0],
           balances: undefined,
-        }
+        },
       };
 
-      wallet.confirm.push(new ConfirmState({
-        uuid: msg.uuid,
-        metadata,
-        evm: {
-          ...txParams,
-          from: currentAddress,
-          chainId: chainConfig.chainId,
-        },
-      }));
+      wallet.confirm.push(
+        new ConfirmState({
+          uuid: msg.uuid,
+          metadata,
+          evm: {
+            ...txParams,
+            from: currentAddress,
+            chainId: chainConfig.chainId,
+          },
+        }),
+      );
 
       await this.#state.sync();
       new PromptService().open("/confirm");
@@ -708,7 +828,7 @@ export class EvmService {
   async #handleAddEthereumChain(
     msg: ConnectParams<JsonRPCRequest>,
     wallet: Wallet,
-    sendResponse: StreamResponse
+    sendResponse: StreamResponse,
   ) {
     try {
       const params = msg.payload?.params;
@@ -719,19 +839,26 @@ export class EvmService {
 
       const chainParams = params[0] as EvmAddChainParams;
 
-      if (!chainParams.chainId || !chainParams.chainName || !chainParams.nativeCurrency || !chainParams.rpcUrls) {
+      if (
+        !chainParams.chainId ||
+        !chainParams.chainName ||
+        !chainParams.nativeCurrency ||
+        !chainParams.rpcUrls
+      ) {
         throw new Error(ConnectError.InvalidParams);
       }
 
-      wallet.confirm.push(new ConfirmState({
-        uuid: msg.uuid,
-        evmAddChainRequest: {
-          params: chainParams,
-          domain: msg.domain,
-          title: msg.title || msg.domain,
-          icon: msg.icon || '',
-        },
-      }));
+      wallet.confirm.push(
+        new ConfirmState({
+          uuid: msg.uuid,
+          evmAddChainRequest: {
+            params: chainParams,
+            domain: msg.domain,
+            title: msg.title || msg.domain,
+            icon: msg.icon || "",
+          },
+        }),
+      );
 
       await this.#state.sync();
       new PromptService().open("/add-chain");
@@ -754,27 +881,32 @@ export class EvmService {
 
       const provider = new NetworkProvider(chainConfig);
       let rpcPayload: JsonRPCRequest | JsonRPCRequest[];
-    
+
       if (Array.isArray(msg.payload)) {
         rpcPayload = msg.payload.map((p, index) => ({
-          jsonrpc: '2.0',
+          jsonrpc: "2.0",
           id: index + 1,
           method: p.method,
-          params: p.params || []
+          params: p.params || [],
         }));
       } else {
         rpcPayload = {
-          jsonrpc: '2.0',
+          jsonrpc: "2.0",
           id: 1,
           method: msg.payload!.method,
-          params: msg.payload!.params || []
+          params: msg.payload!.params || [],
         };
       }
 
       const response = await provider.proxyReq(rpcPayload);
 
       if (response.error) {
-        this.#sendError(msg.uuid, msg.domain, response.error.message, response.error.code);
+        this.#sendError(
+          msg.uuid,
+          msg.domain,
+          response.error.message,
+          response.error.code,
+        );
       } else {
         this.#sendSuccess(msg.uuid, msg.domain, response.result);
       }
@@ -786,11 +918,15 @@ export class EvmService {
   #handleChainId(msg: ConnectParams<JsonRPCRequest>, account: Account) {
     const chain = this.#state.getChain(account.chainHash);
     const chainId = bigintToHex(BigInt(chain?.chainId ?? 0));
-    
+
     this.#sendSuccess(msg.uuid, msg.domain, chainId);
   }
 
-  #handleAccounts(msg: ConnectParams<JsonRPCRequest>, wallet: Wallet, account: Account) {
+  #handleAccounts(
+    msg: ConnectParams<JsonRPCRequest>,
+    wallet: Wallet,
+    account: Account,
+  ) {
     const hash = hashXORHex(account.pubKey);
     const isConnected = this.#state.connections.isConnected(msg.domain, hash);
 
@@ -805,7 +941,7 @@ export class EvmService {
   async #handleWatchAsset(
     msg: ConnectParams<JsonRPCRequest>,
     wallet: Wallet,
-    sendResponse: StreamResponse
+    sendResponse: StreamResponse,
   ) {
     try {
       if (!msg.payload) {
@@ -814,7 +950,7 @@ export class EvmService {
 
       const params = msg.payload.params as unknown as ParamsWatchAsset;
 
-      if (!params || params.type !== 'ERC20' || !params.options) {
+      if (!params || params.type !== "ERC20" || !params.options) {
         throw new Error(`${ConnectError.UnsupportedType} ${params?.type}`);
       }
 
@@ -829,7 +965,7 @@ export class EvmService {
       const tokenExists = wallet.tokens.some(
         (token) =>
           token.addr.toLowerCase() === options.address.toLowerCase() &&
-          token.chainHash === account.chainHash
+          token.chainHash === account.chainHash,
       );
 
       if (tokenExists) {
@@ -852,38 +988,49 @@ export class EvmService {
         chainHash: account.chainHash,
       });
 
-      wallet.confirm.push(new ConfirmState({
-        uuid: msg.uuid,
-        evmAddAssetRequest: [newFToken],
-        metadata: {
-          domain: msg.domain,
-          title: msg.title || msg.domain,
-          icon: msg.icon,
-          chainHash: account.chainHash,
-          token: {
-            ...newFToken,
-            balances: undefined,
-          }
-        }
-      }));
-      
+      wallet.confirm.push(
+        new ConfirmState({
+          uuid: msg.uuid,
+          evmAddAssetRequest: [newFToken],
+          metadata: {
+            domain: msg.domain,
+            title: msg.title || msg.domain,
+            icon: msg.icon,
+            chainHash: account.chainHash,
+            token: {
+              ...newFToken,
+              balances: undefined,
+            },
+          },
+        }),
+      );
+
       await this.#state.sync();
       new PromptService().open("/add-asset");
       sendResponse({ resolve: true });
-
     } catch (error) {
       this.#sendError(msg.uuid, msg.domain, String(error), 4001);
       sendResponse({ reject: String(error) });
     }
   }
 
-  async #handleRequestPermissions(msg: ConnectParams<JsonRPCRequest>, sendResponse: StreamResponse) {
-    const params = msg.payload?.params?.[0] as Record<string, unknown> | undefined;
+  async #handleRequestPermissions(
+    msg: ConnectParams<JsonRPCRequest>,
+    sendResponse: StreamResponse,
+  ) {
+    const params = msg.payload?.params?.[0] as
+      | Record<string, unknown>
+      | undefined;
 
     if (params?.eth_accounts) {
       await this.#connectService.callConnect(msg, sendResponse);
     } else {
-      this.#sendError(msg.uuid, msg.domain, ConnectError.InvalidPermissionRequest, 4001);
+      this.#sendError(
+        msg.uuid,
+        msg.domain,
+        ConnectError.InvalidPermissionRequest,
+        4001,
+      );
       sendResponse({ reject: ConnectError.InvalidPermissionRequest });
     }
   }
@@ -896,21 +1043,22 @@ export class EvmService {
       return;
     }
 
-    const address = account.slip44 === ZILLIQA 
-      ? account.addr.split(":").at(-1)
-      : account.addr;
+    const address =
+      account.slip44 === ZILLIQA
+        ? account.addr.split(":").at(-1)
+        : account.addr;
 
     const permissions = [
       {
         invoker: msg.domain,
-        parentCapability: 'eth_accounts',
+        parentCapability: "eth_accounts",
         caveats: [
           {
-            type: 'restrictReturnedAccounts',
-            value: [address]
-          }
-        ]
-      }
+            type: "restrictReturnedAccounts",
+            value: [address],
+          },
+        ],
+      },
     ];
 
     this.#sendSuccess(msg.uuid, msg.domain, permissions);
@@ -934,7 +1082,12 @@ export class EvmService {
     }).send(domain);
   }
 
-  #sendError(uuid: string, domain: string, message: string, code: number): void {
+  #sendError(
+    uuid: string,
+    domain: string,
+    message: string,
+    code: number,
+  ): void {
     new TabsMessage({
       type: MTypePopup.EVM_RESPONSE,
       uuid,
