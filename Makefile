@@ -10,7 +10,7 @@ clean:
 # Build for Manifest V2
 build-mv2:
 	mkdir -p dist
-	MANIFEST=2 npm run build
+	MANIFEST=2 bun run build
 
 # Compute SHA256 checksums for Manifest V2 (macOS-compatible)
 hash-mv2:
@@ -23,7 +23,7 @@ zip-mv2:
 # Build for Manifest V3
 build-mv3:
 	mkdir -p dist
-	MANIFEST=3 npm run build
+	MANIFEST=3 bun run build
 
 # Compute SHA256 checksums for Manifest V3 (macOS-compatible)
 hash-mv3:
