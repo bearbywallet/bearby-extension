@@ -52,6 +52,8 @@ export class ProviderService {
         return account;
       }));
 
+      wallet.defaultChainHash = chain.hash();
+
       await this.#worker.stop();
       await this.#worker.start();
       await this.#state.sync();
