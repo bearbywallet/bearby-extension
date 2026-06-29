@@ -7,7 +7,7 @@ import { RatesApiOptions } from "config/api";
 import { ZERO_EVM } from "config/common";
 import { ConnectError } from "config/errors";
 import { NFTStandard } from "config/token";
-import { ETHEREUM, ZILLIQA } from "config/slip44";
+import { ZILLIQA } from "config/slip44";
 import { AddressType } from "config/wallet";
 import { Address } from "crypto/address";
 import type { StreamResponse } from "lib/streem";
@@ -286,21 +286,31 @@ export class TokenService {
       }
 
       const currency = wallet.settings.currencyConvert;
-      const convertRate = await this.#fetchConvertRate(
-        wallet.settings.ratesApiOptions,
-        nativeToken.symbol,
-        currency
-      );
+      const chainHash = chain.hash();
+      const chainTokens = wallet.tokens.filter((t) => t.chainHash === chainHash);
 
-      if (convertRate === null) {
+      if (wallet.settings.ratesApiOptions === RatesApiOptions.None) {
         sendResponse({ resolve: wallet.tokens });
         return;
       }
 
-      const chainHash = chain.hash();
-      const chainTokens = wallet.tokens.filter((t) => t.chainHash === chainHash);
+      if (chain.slip44 === ZILLIQA) {
+        const convertRate = await this.#fetchConvertRate(
+          wallet.settings.ratesApiOptions,
+          nativeToken.symbol,
+          currency
+        );
 
-      await this.#updateChainRates(chain, chainTokens, convertRate, currency);
+        if (convertRate === null) {
+          sendResponse({ resolve: wallet.tokens });
+          return;
+        }
+
+        await this.#updateZilliqaRates(chainTokens, convertRate);
+      } else {
+        await this.#updateBearbyRates(chainTokens, currency);
+      }
+
       await this.#state.sync();
 
       sendResponse({ resolve: wallet.tokens });
@@ -352,25 +362,6 @@ export class TokenService {
     return entry?.rate ?? 0;
   }
 
-  async #updateChainRates(
-    chain: ChainConfig,
-    tokens: FToken[],
-    convertRate: number,
-    currency: string
-  ): Promise<void> {
-    switch (chain.slip44) {
-      case ZILLIQA:
-        await this.#updateZilliqaRates(tokens, convertRate);
-        break;
-      case ETHEREUM:
-        await this.#updateEthereumRates(chain.chainId, tokens, convertRate, currency);
-        break;
-      default:
-        this.#updateNativeRate(tokens, convertRate);
-        break;
-    }
-  }
-
   async #updateZilliqaRates(tokens: FToken[], convertRate: number): Promise<void> {
     const response = await fetch("https://api-v2.zilstream.com/tokens?page=1&per_page=500");
 
@@ -400,42 +391,35 @@ export class TokenService {
     }
   }
 
-  async #updateEthereumRates(
-    chainId: number,
+  async #updateBearbyRates(
     tokens: FToken[],
-    convertRate: number,
     currency: string
   ): Promise<void> {
     if (tokens.length === 0) return;
 
-    const tokenAddresses = tokens.map((t) => t.addr.toLowerCase());
-    const addressesParam = tokenAddresses.join(",");
-    const url = `https://price.api.cx.metamask.io/v2/chains/${chainId}/spot-prices?tokenAddresses=${addressesParam}&vsCurrency=${currency.toUpperCase()}&includeMarketData=false`;
-
+    const symbols = tokens.map((t) => t.symbol.toUpperCase()).join(",");
+    const url = `https://rates.bearby.io/convert?to=${currency.toUpperCase()}&for=${symbols}`;
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error(`price API error: ${response.status}`);
+      throw new Error(`Bearby rates API error: ${response.status}`);
     }
 
-    const prices: Record<string, Record<string, number>> = await response.json();
-    const currencyKey = currency.toLowerCase();
+    const data: BearbyRate[] = await response.json();
+    const rateMap = new Map<string, number>();
 
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
-      const addr = tokenAddresses[i];
-      const priceData = prices[addr];
-
-      if (priceData?.[currencyKey] !== undefined) {
-        token.rate = token.native ? convertRate : priceData[currencyKey];
+    for (const entry of data) {
+      if (entry.rate !== null) {
+        rateMap.set(entry.from.toUpperCase(), entry.rate);
       }
     }
-  }
 
-  #updateNativeRate(tokens: FToken[], convertRate: number): void {
-    const nativeToken = tokens.find((t) => t.native);
-    if (nativeToken) {
-      nativeToken.rate = convertRate;
+    for (const token of tokens) {
+      const symbolUpper = token.symbol.toUpperCase();
+      const rate = rateMap.get(symbolUpper);
+      if (rate !== undefined) {
+        token.rate = rate;
+      }
     }
   }
 }
