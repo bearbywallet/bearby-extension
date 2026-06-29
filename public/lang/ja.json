@@ -428,7 +428,7 @@
     "engine": {
       "title": "価格エンジンを選択",
       "none": "なし",
-      "cryptocompareDescription": "集約された暗号通貨価格データ",
+      "bearbyDescription": "Bearby 集約された暗号通貨価格データ",
       "coingeckoDescription": "リアルタイム暗号通貨価格データ",
       "noneDescription": "価格変換を無効にする"
     }

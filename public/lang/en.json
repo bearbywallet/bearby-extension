@@ -428,7 +428,7 @@
     "engine": {
       "title": "Select Price Engine",
       "none": "None",
-      "cryptocompareDescription": "Aggregated cryptocurrency price data",
+      "bearbyDescription": "Aggregated cryptocurrency price data by Bearby",
       "coingeckoDescription": "Real-time cryptocurrency price data",
       "noneDescription": "Disable price conversion"
     }

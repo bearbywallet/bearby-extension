@@ -22,7 +22,7 @@
     const selectedEngine = $derived(currentWallet?.settings?.ratesApiOptions ?? RatesApiOptions.CoinGecko);
 
     const engineNames = $derived({
-        [RatesApiOptions.CryptoCompare]: 'CryptoCompare',
+        [RatesApiOptions.Bearby]: 'Bearby',
         [RatesApiOptions.CoinGecko]: 'Coingecko',
         [RatesApiOptions.None]: $_('currency.engine.none')
     });

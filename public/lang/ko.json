@@ -428,7 +428,7 @@
     "engine": {
       "title": "가격 엔진 선택",
       "none": "없음",
-      "cryptocompareDescription": "통합 암호화폐 가격 데이터",
+      "bearbyDescription": "Bearby 통합 암호화폐 가격 데이터",
       "coingeckoDescription": "실시간 암호화폐 가격 데이터",
       "noneDescription": "가격 변환 비활성화"
     }

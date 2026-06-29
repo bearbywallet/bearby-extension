@@ -24,6 +24,11 @@ interface ZilstreamResponse {
   data: ZilstreamToken[];
 }
 
+interface BearbyRate {
+  from: string;
+  rate: number | null;
+}
+
 interface ZilliqaEvmToken {
   address: string;
   decimals: number;
@@ -312,8 +317,8 @@ export class TokenService {
     switch (ratesApiOptions) {
       case RatesApiOptions.CoinGecko:
         return this.#fetchCoinGeckoRate(symbol, currency);
-      case RatesApiOptions.CryptoCompare:
-        return this.#fetchCryptoCompareRate(symbol, currency);
+      case RatesApiOptions.Bearby:
+        return this.#fetchBearbyRate(symbol, currency);
       default:
         return null;
     }
@@ -334,16 +339,17 @@ export class TokenService {
     return data[symbolId]?.[currency.toLowerCase()] ?? 0;
   }
 
-  async #fetchCryptoCompareRate(symbol: string, currency: string): Promise<number> {
-    const url = `https://min-api.cryptocompare.com/data/price?fsym=${symbol}&tsyms=${currency.toUpperCase()}`;
+  async #fetchBearbyRate(symbol: string, currency: string): Promise<number> {
+    const url = `https://rates.bearby.io/convert?to=${currency.toUpperCase()}&for=${symbol.toUpperCase()}`;
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error(`CryptoCompare API error: ${response.status}`);
+      throw new Error(`Bearby rates API error: ${response.status}`);
     }
 
-    const data = await response.json();
-    return data[currency.toUpperCase()] ?? 0;
+    const data: BearbyRate[] = await response.json();
+    const entry = data.find((r) => r.from.toUpperCase() === symbol.toUpperCase());
+    return entry?.rate ?? 0;
   }
 
   async #updateChainRates(

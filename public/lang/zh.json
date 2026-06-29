@@ -442,7 +442,7 @@
     "engine": {
       "title": "选择价格引擎",
       "none": "无",
-      "cryptocompareDescription": "聚合加密货币价格数据",
+      "bearbyDescription": "Bearby 聚合加密货币价格数据",
       "coingeckoDescription": "实时加密货币价格数据",
       "noneDescription": "禁用价格转换"
     }

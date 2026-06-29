@@ -442,7 +442,7 @@
     "engine": {
       "title": "Выбрать Движок Цен",
       "none": "Нет",
-      "cryptocompareDescription": "Агрегированные данные о ценах криптовалют",
+      "bearbyDescription": "Агрегированные данные о ценах криптовалют от Bearby",
       "coingeckoDescription": "Данные о ценах криптовалют в реальном времени",
       "noneDescription": "Отключить конвертацию цен"
     }

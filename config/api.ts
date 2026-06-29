@@ -1,5 +1,5 @@
 export enum RatesApiOptions {
-  CryptoCompare,
+  Bearby,
   CoinGecko,
   None,
 }

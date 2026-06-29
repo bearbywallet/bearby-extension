@@ -18,9 +18,9 @@
 
     const engines: Engine[] = [
         {
-            id: RatesApiOptions.CryptoCompare,
-            name: 'CryptoCompare',
-            description: $_('currency.engine.cryptocompareDescription')
+            id: RatesApiOptions.Bearby,
+            name: 'Bearby',
+            description: $_('currency.engine.bearbyDescription')
         },
         {
             id: RatesApiOptions.CoinGecko,
