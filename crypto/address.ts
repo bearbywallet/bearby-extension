@@ -9,9 +9,7 @@ import { KeyPair } from "./keypair";
 import { HRP } from "lib/zilliqa/config";
 import { hasHexPrefix, hexToUint8Array, uint8ArrayToHex } from "lib/utils/hex";
 import { AddressType } from "config/wallet";
-import { createStepLogger } from "lib/utils/debug-log";
 
-const logAddress = createStepLogger("Address");
 
 export class Address {
   readonly #bytes: Uint8Array;

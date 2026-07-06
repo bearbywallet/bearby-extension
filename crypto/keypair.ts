@@ -11,9 +11,7 @@ import { randomBytes } from "./random";
 import { Address } from "./address";
 import { AddressType } from "config/wallet";
 import type { IKeyPair } from "types/wallet";
-import { createStepLogger } from "lib/utils/debug-log";
 
-const logKeypair = createStepLogger("KeyPair");
 
 export class KeyPair {
   #privateKey: Uint8Array;

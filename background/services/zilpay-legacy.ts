@@ -13,9 +13,7 @@ import { TabsMessage } from "lib/streem/tabs-message";
 import { hexToUint8Array, uint8ArrayToHex } from "lib/utils/hex";
 import { utf8ToUint8Array } from "lib/utils/utf8";
 import type { SignMesageReqScilla, TransactionRequestScilla } from "types/tx";
-import { createStepLogger } from "lib/utils/debug-log";
 
-const logZilLegacy = createStepLogger("ZilPayLegacyService");
 
 export class ZilPayLegacyService {
   #state: BackgroundState;
@@ -30,77 +28,24 @@ export class ZilPayLegacyService {
 
   async signTx(uuid: string, domain: string, payload: TransactionRequestScilla, title: string, icon: string, sendResponse: StreamResponse) {
     try {
-      this.#logSignTxStep("start", {
-        uuid,
-        domain,
-        selectedWallet: this.#state.selectedWallet,
-        payloadChainId: payload.chainId,
-        payloadNonce: payload.nonce,
-        payloadToAddr: payload.toAddr,
-        payloadAmount: payload.amount,
-        payloadGasLimit: payload.gasLimit,
-        payloadGasPrice: payload.gasPrice,
-        hasCode: Boolean(payload.code),
-        hasData: Boolean(payload.data),
-      });
 
       const isConnected = this.#state.connections.isConnected(domain);
-      this.#logSignTxStep("connection-check", {
-        uuid,
-        domain,
-        isConnected,
-      });
 
       if (!isConnected) {
         throw new Error(ConnectError.WalletNotConnected);
       }
 
       const wallet = this.#state.wallets[this.#state.selectedWallet];
-      this.#logSignTxStep("wallet-selected", {
-        uuid,
-        selectedWallet: this.#state.selectedWallet,
-        walletFound: Boolean(wallet),
-      });
 
       if (!wallet) {
         throw new Error(ConnectError.WalletNotFound);
       }
 
       await wallet.trhowSession();
-      this.#logSignTxStep("session-ok", {
-        uuid,
-        walletType: wallet.walletType,
-        selectedAccount: wallet.selectedAccount,
-        defaultChainHash: wallet.defaultChainHash,
-      });
 
       const account = wallet.accounts[wallet.selectedAccount];
-      this.#logSignTxStep("account-selected", {
-        uuid,
-        selectedAccount: wallet.selectedAccount,
-        accountFound: Boolean(account),
-        accountAddr: account?.addr,
-        accountAddrType: account?.addrType,
-        accountSlip44: account?.slip44,
-        accountChainHash: account?.chainHash,
-        accountChainId: account?.chainId,
-        accountIndex: account?.index,
-        hasPubKey: Boolean(account?.pubKey),
-      });
 
       const chain = this.#state.getChain(account.chainHash);
-      this.#logSignTxStep("chain-selected", {
-        uuid,
-        accountChainHash: account.chainHash,
-        chainFound: Boolean(chain),
-        chainName: chain?.name,
-        chainSlip44: chain?.slip44,
-        chainId: chain?.chainId,
-        chainIds: chain?.chainIds,
-        nativeTokenAddr: chain?.ftokens[0]?.addr,
-        scillaTokenAddr: chain?.ftokens[1]?.addr,
-        scillaTokenAddrType: chain?.ftokens[1]?.addrType,
-      });
 
       wallet.confirm.push(new ConfirmState({
         uuid: uuid,
@@ -121,34 +66,13 @@ export class ZilPayLegacyService {
           },
         }
       }));
-      this.#logSignTxStep("confirm-created", {
-        uuid,
-        confirmCount: wallet.confirm.length,
-        scillaChainId: chain?.chainIds[1],
-        normalizedGasLimit: Number(payload.gasLimit ?? 0),
-        normalizedGasPrice: Number(payload.gasPrice ?? 0),
-        metadataChainHash: account.chainHash,
-      });
 
       await this.#state.sync();
-      this.#logSignTxStep("state-synced", {
-        uuid,
-        confirmCount: wallet.confirm.length,
-      });
 
       new PromptService().open("/confirm");
-      this.#logSignTxStep("prompt-opened", {
-        uuid,
-        route: "/confirm",
-      });
 
       sendResponse({ resolve: true, });
     } catch (e) {
-      this.#logSignTxStep("error", {
-        uuid,
-        domain,
-        error: String(e),
-      });
         new TabsMessage({
           type: LegacyZilliqaTabMsg.TX_RESULT,
           uuid,

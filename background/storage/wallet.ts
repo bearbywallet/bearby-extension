@@ -19,11 +19,9 @@ import type { NFTMetadata } from 'types/token';
 import { Address } from 'crypto/address';
 import type { LedgerPublicAddress } from 'types/ledger';
 import { ConnectError } from 'config/errors';
-import { createStepLogger } from 'lib/utils/debug-log';
 import { compareAddresses } from 'lib/utils/address-compare';
 import { ZILLIQA, ETHEREUM } from 'config/slip44';
 
-const logWallet = createStepLogger("Wallet");
 
 export interface IWalletState {
   uuid: string;

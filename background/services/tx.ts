@@ -18,10 +18,8 @@ import { MTypePopup } from "config/stream";
 import { ConnectError } from "config/errors";
 import { bip32asUInt8Array } from "ledger/bip32";
 import { HRP } from "lib/zilliqa";
-import { createStepLogger } from "lib/utils/debug-log";
 
 
-const logTxStep = createStepLogger("TransactionService");
 
 export class TransactionService {
   #state: BackgroundState;
@@ -80,12 +78,6 @@ export class TransactionService {
 
   async signTxAndbroadcastJsonRPC(confirmIndex: number, walletIndex: number, accountIndex: number, sendResponse: StreamResponse, sig?: string) {
     try {
-      logTxStep("start", {
-        confirmIndex,
-        walletIndex,
-        accountIndex,
-        hasSig: Boolean(sig),
-      });
 
       const wallet = this.#state.wallets[walletIndex];
       await wallet.trhowSession();
@@ -101,34 +93,12 @@ export class TransactionService {
       const evm = confirm.evm;
       const txReq = new TransactionRequest(metadata, scilla, evm);
 
-      logTxStep("context-loaded", {
-        walletType: wallet.walletType,
-        accountAddr: account.addr,
-        accountAddrType: account.addrType,
-        accountSlip44: account.slip44,
-        accountChainHash: account.chainHash,
-        accountIndex: account.index,
-        hasPubKey: Boolean(account.pubKey),
-        pubKeyLen: account.pubKey?.length ?? 0,
-        chainConfigSlip44: chainConfig.slip44,
-        chainConfigChainId: chainConfig.chainId,
-        chainConfigChainIds: chainConfig.chainIds,
-        defaultChainSlip44: defaultChainConfig.slip44,
-        defaultChainChainId: defaultChainConfig.chainId,
-        hasScilla: Boolean(scilla),
-        hasEvm: Boolean(evm),
-      });
 
       let signedTx: SignedTransaction;
 
       if (wallet.walletType == WalletTypes.Ledger && sig) {
-        logTxStep("ledger-path", {
-          walletType: wallet.walletType,
-          sigLen: sig.length,
-        });
         signedTx = await txReq.withSignature(sig, account.pubKey);
         await signedTx.verify();
-        logTxStep("ledger-signed-and-verified", {});
       } else {
         const allSlip44s = new Set(this.#state.chains.map((c) => c.slip44));
         const intendedSigningType = scilla ? ("schnorr" as const) : ("eip191" as const);
@@ -139,18 +109,9 @@ export class TransactionService {
           intendedSigningType,
         );
 
-        logTxStep("signing", {
-          keyPairSlip44: keyPair.slip44,
-          txType: scilla ? "scilla" : evm ? "evm" : "unknown",
-        });
         signedTx = await txReq.sign(keyPair);
-        logTxStep("signed", { transactionType: scilla ? "scilla" : "evm" });
       }
 
-      logTxStep("broadcasting", {
-        transactionType: scilla ? "scilla" : "evm",
-        domain: confirm.metadata?.domain,
-      });
 
       const [history] = await provider.broadcastSignedTransactions([signedTx]);
 
@@ -158,10 +119,6 @@ export class TransactionService {
       this.#state.wallets[walletIndex].confirm.splice(confirmIndex, 1);
       await this.#state.sync();
 
-      logTxStep("broadcast-success", {
-        txHash: history.scilla?.hash ?? history.evm?.transactionHash,
-        confirmRemaining: wallet.confirm.length,
-      });
 
       if (confirm && confirm.scilla && confirm.uuid && confirm.metadata?.domain) {
         new TabsMessage({
@@ -185,12 +142,6 @@ export class TransactionService {
         resolve: history,
       });
     } catch (err) {
-      logTxStep("error", {
-        confirmIndex,
-        walletIndex,
-        accountIndex,
-        error: String(err),
-      });
       sendResponse({ reject: String(err) });
     }
   }
