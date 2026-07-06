@@ -51,27 +51,14 @@ export class Address {
   }
 
   static async fromPubKeyType(pubKey: Uint8Array, addressType: AddressType) {
-    logAddress("fromPubKeyType", {
-      addressType,
-      pubKeyLen: pubKey?.length,
-    });
     switch (addressType) {
       case AddressType.Bech32: {
         const zilBytes = await fromZilPubKey(pubKey);
-        logAddress("fromPubKeyType:bech32", {
-          addressType,
-          bytesLen: zilBytes?.length,
-        });
         return new Address(zilBytes, addressType);
       }
       case AddressType.EthCheckSum: {
         const ethChecsumAddress = ethAddr.fromPublicKey(pubKey);
         const ethBytes = hexToUint8Array(ethChecsumAddress);
-        logAddress("fromPubKeyType:eth", {
-          addressType,
-          ethChecksum: ethChecsumAddress,
-          bytesLen: ethBytes?.length,
-        });
         return new Address(ethBytes, addressType);
       }
     }
@@ -112,10 +99,6 @@ export class Address {
           return this.toEthChecksum();
       }
     })();
-    logAddress("autoFormat", {
-      type: this.#type,
-      result,
-    });
     return result;
   }
 

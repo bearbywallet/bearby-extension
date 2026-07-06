@@ -104,11 +104,9 @@
     }
 
     function handleNFTClick(token: NFTTokenInfo, collection: NFTMetadata) {
-        console.log('NFT clicked:', { token, collection });
     }
 
     async function handleRefresh() {
-        console.log('Refresh NFTs', currentWallet);
     }
 
     $effect(() => {

@@ -132,7 +132,6 @@
                 name: `${selectedDevice?.name} ${i + 1}`
             }));
 
-            console.log('[LEDGER-CONNECT:handleConnectAccounts] Successfully fetched accounts:', accounts.map(a => a.pubAddr));
         } catch (err: unknown) {
             console.error('[LEDGER-CONNECT:handleConnectAccounts] Error connecting accounts', { count: accountCount, error: err });
             if (err instanceof Error) {

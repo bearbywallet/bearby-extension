@@ -52,25 +52,9 @@ export class Account implements IAccountState {
       const evmAddr = await address.toEthChecksum();
 
       addr = `${bech32}:${evmAddr}`;
-      console.log('[Account] derived bech32 compound address', JSON.stringify({
-        addrType,
-        slip44: chain.slip44,
-        chainId: chain.chainId,
-        chainHash: chain.hash(),
-        bech32,
-        evmAddr,
-        addr,
-      }));
     } else {
       const address = await keyPair.address();
       addr = await address.autoFormat();
-      console.log('[Account] derived address', JSON.stringify({
-        addrType,
-        slip44: chain.slip44,
-        chainId: chain.chainId,
-        chainHash: chain.hash(),
-        addr,
-      }));
     }
 
     const account = new Account({
@@ -99,25 +83,9 @@ export class Account implements IAccountState {
       const evmAddr = await address.toEthChecksum();
 
       addr = `${bech32}:${evmAddr}`;
-      console.log('[Account] derived bech32 compound address', JSON.stringify({
-        addrType,
-        slip44: chain.slip44,
-        chainId: chain.chainId,
-        chainHash: chain.hash(),
-        bech32,
-        evmAddr,
-        addr,
-      }));
     } else {
       const address = await keyPair.address();
       addr = await address.autoFormat();
-      console.log('[Account] derived address', JSON.stringify({
-        addrType,
-        slip44: chain.slip44,
-        chainId: chain.chainId,
-        chainHash: chain.hash(),
-        addr,
-      }));
     }
 
     const account = new Account({

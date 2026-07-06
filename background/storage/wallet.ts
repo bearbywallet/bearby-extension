@@ -251,24 +251,10 @@ export class Wallet implements IWalletState {
     switch (this.walletType) {
       case WalletTypes.SecretPhrase: {
         const seed = await this.#session.getVault();
-        logWallet("revealKeypair:from-seed", {
-          walletType: this.walletType,
-          accountIndex,
-          slip44: chain.slip44,
-          chainId: chain.chainId,
-          seedLen: seed?.length,
-        });
         return KeyPair.fromSeed(seed, chain.slip44, accountIndex);
       }
       case WalletTypes.SecretKey: {
         const privateKey = await this.#session.getVault();
-        logWallet("revealKeypair:from-private-key", {
-          walletType: this.walletType,
-          accountIndex,
-          slip44: chain.slip44,
-          chainId: chain.chainId,
-          pkLen: privateKey?.length,
-        });
         return KeyPair.fromPrivateKey(privateKey, chain.slip44);
       }
       default:
@@ -293,22 +279,10 @@ export class Wallet implements IWalletState {
     switch (this.walletType) {
       case WalletTypes.SecretPhrase: {
         const seed = await this.#session.getVault();
-        logWallet("revealKeypairWithSlip44:from-seed", {
-          walletType: this.walletType,
-          accountIndex,
-          slip44,
-          seedLen: seed?.length,
-        });
         return KeyPair.fromSeed(seed, slip44, accountIndex);
       }
       case WalletTypes.SecretKey: {
         const privateKey = await this.#session.getVault();
-        logWallet("revealKeypairWithSlip44:from-private-key", {
-          walletType: this.walletType,
-          accountIndex,
-          slip44,
-          pkLen: privateKey?.length,
-        });
         return KeyPair.fromPrivateKey(privateKey, slip44);
       }
       default:
@@ -340,15 +314,6 @@ export class Wallet implements IWalletState {
     const derivedAddrObj = await Address.fromPubKeyType(keyPair.pubKey, account.addrType);
     const derivedAddr = await derivedAddrObj.autoFormat();
 
-    logWallet("resolveKeypair:primary-try", {
-      accountIndex,
-      accountAddr: account.addr,
-      accountAddrType: account.addrType,
-      primarySlip44: primaryChain.slip44,
-      derivedAddr,
-      match: compareAddresses(account.addr, account.addrType, derivedAddr),
-    });
-
     if (compareAddresses(account.addr, account.addrType, derivedAddr)) {
       return keyPair;
     }
@@ -364,14 +329,6 @@ export class Wallet implements IWalletState {
 
         const matches = compareAddresses(account.addr, account.addrType, probeFormatted);
 
-        logWallet("resolveKeypair:fallback-probe", {
-          accountIndex,
-          slip44,
-          probeFormatted,
-          matches,
-          accountAddr: account.addr,
-        });
-
         if (matches) {
           // Force correct slip44 for signing algorithm:
           // - Schnorr (scilla/ZIL txs) → ZILLIQA slip44
@@ -379,31 +336,12 @@ export class Wallet implements IWalletState {
           const effectiveSlip44 =
             intendedSigningType === "schnorr" ? ZILLIQA : ETHEREUM;
           keyPair = await KeyPair.fromPrivateKey(probeKeyPair.privateKey, effectiveSlip44);
-
-          logWallet("resolveKeypair:match-found", {
-            accountIndex,
-            originalSlip44: slip44,
-            effectiveSlip44,
-            intendedSigningType,
-            matchedAddr: probeFormatted,
-          });
           return keyPair;
         }
       } catch (err) {
-        logWallet("resolveKeypair:probe-error", {
-          accountIndex,
-          slip44,
-          error: String(err),
-        });
       }
     }
 
-    logWallet("resolveKeypair:exhausted", {
-      accountIndex,
-      accountAddr: account.addr,
-      accountAddrType: account.addrType,
-      triedSlip44s: Array.from(allSlip44s),
-    });
     throw new Error(ConnectError.AddressMismatch);
   }
 

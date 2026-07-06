@@ -39,28 +39,8 @@ export class ProviderService {
             const bech32 = await addr.toZilBech32();
             const base16 = await evmAddr.toEthChecksum();
             account.addr = `${bech32}:${base16}`;
-            console.log('[ProviderService] switched network bech32 compound address', JSON.stringify({
-              walletIndex,
-              accountIndex: account.index,
-              addrType: addr.type,
-              slip44: chain.slip44,
-              chainId: chain.chainId,
-              chainHash: chain.hash(),
-              bech32,
-              base16,
-              accountAddr: account.addr,
-            }));
           } else {
             account.addr = await addr.autoFormat();
-            console.log('[ProviderService] switched network address', JSON.stringify({
-              walletIndex,
-              accountIndex: account.index,
-              addrType: addr.type,
-              slip44: chain.slip44,
-              chainId: chain.chainId,
-              chainHash: chain.hash(),
-              accountAddr: account.addr,
-            }));
           }
 
           account.addrType = addr.type;

@@ -22,10 +22,6 @@ export class ZilPayLegacyService {
     this.#state = state;
   }
 
-  #logSignTxStep(step: string, details: Readonly<Record<string, unknown>>) {
-    console.log(`[ZilPayLegacyService.signTx] ${step}`, JSON.stringify(details));
-  }
-
   async signTx(uuid: string, domain: string, payload: TransactionRequestScilla, title: string, icon: string, sendResponse: StreamResponse) {
     try {
 
@@ -161,14 +157,6 @@ export class ZilPayLegacyService {
     sig?: string,
   ) {
     try {
-      logZilLegacy("signMessageRes:start", {
-        uuid,
-        walletIndex,
-        accountIndex,
-        approve,
-        hasLedgerSig: Boolean(sig),
-      });
-
       const wallet = this.#state.wallets[walletIndex];
 
       if (!wallet) {
@@ -184,19 +172,7 @@ export class ZilPayLegacyService {
         throw new Error(`not found ${uuid}`);
       }
 
-      logZilLegacy("signMessageRes:context", {
-        uuid,
-        walletType: wallet.walletType,
-        accountAddr: account.addr,
-        accountAddrType: account.addrType,
-        accountSlip44: account.slip44,
-        accountIndex: account.index,
-        hasPubKey: Boolean(account.pubKey),
-        messageHash: scillaMessage.signMessageScilla.hash,
-      });
-
       if (!approve) {
-        logZilLegacy("signMessageRes:rejected", { uuid });
         new TabsMessage({
           type: LegacyZilliqaTabMsg.SING_MESSAGE_RES,
           uuid: scillaMessage.uuid,
@@ -208,7 +184,6 @@ export class ZilPayLegacyService {
         let signature: string;
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
-          logZilLegacy("signMessageRes:ledger-verify", { uuid, sigLen: sig.length });
           const sigBytes = hexToUint8Array(sig);
           const hash = hexToUint8Array(scillaMessage.signMessageScilla.hash);
           const pubKeyBytes = hexToUint8Array(account.pubKey);
@@ -220,12 +195,6 @@ export class ZilPayLegacyService {
         } else {
           const defaultChainConfig = this.#state.getChain(wallet.defaultChainHash)!;
 
-          logZilLegacy("signMessageRes:default-chain", {
-            uuid,
-            defaultChainSlip44: defaultChainConfig.slip44,
-            defaultChainChainId: defaultChainConfig.chainId,
-          });
-
           const allSlip44s = new Set(this.#state.chains.map((c) => c.slip44));
           const keyPair = await wallet.resolveKeypair(
             account.index,
@@ -234,16 +203,10 @@ export class ZilPayLegacyService {
             "schnorr",
           );
 
-          logZilLegacy("signMessageRes:keypair-resolved", {
-            uuid,
-            keyPairSlip44: keyPair.slip44,
-          });
-
           const hashBytes = hexToUint8Array(scillaMessage.signMessageScilla.hash);
           const sig = await keyPair.signMessage(hashBytes);
 
           signature = uint8ArrayToHex(sig);
-          logZilLegacy("signMessageRes:signed", { uuid, sigLen: signature.length });
         }
 
         new TabsMessage({
@@ -264,7 +227,6 @@ export class ZilPayLegacyService {
 
       sendResponse({ resolve: wallet.confirm, });
     } catch (e) {
-      logZilLegacy("signMessageRes:error", { uuid, error: String(e) });
       sendResponse({ reject: String(e) });
     }
   }
