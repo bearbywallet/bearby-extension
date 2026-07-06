@@ -16,9 +16,14 @@ import { ConfirmState, type IConfirmState } from './confirm';
 import { AuthMethod, WalletTypes } from 'config/wallet';
 import type { Bip32Account } from 'types/wallet';
 import type { NFTMetadata } from 'types/token';
-import type { Address } from 'crypto/address';
+import { Address } from 'crypto/address';
 import type { LedgerPublicAddress } from 'types/ledger';
 import { ConnectError } from 'config/errors';
+import { createStepLogger } from 'lib/utils/debug-log';
+import { compareAddresses } from 'lib/utils/address-compare';
+import { ZILLIQA, ETHEREUM } from 'config/slip44';
+
+const logWallet = createStepLogger("Wallet");
 
 export interface IWalletState {
   uuid: string;
@@ -246,12 +251,28 @@ export class Wallet implements IWalletState {
 
   async revealKeypair(accountIndex: number, chain: ChainConfig): Promise<KeyPair> {
     switch (this.walletType) {
-      case WalletTypes.SecretPhrase:
+      case WalletTypes.SecretPhrase: {
         const seed = await this.#session.getVault();
+        logWallet("revealKeypair:from-seed", {
+          walletType: this.walletType,
+          accountIndex,
+          slip44: chain.slip44,
+          chainId: chain.chainId,
+          seedLen: seed?.length,
+        });
         return KeyPair.fromSeed(seed, chain.slip44, accountIndex);
-      case WalletTypes.SecretKey:
+      }
+      case WalletTypes.SecretKey: {
         const privateKey = await this.#session.getVault();
+        logWallet("revealKeypair:from-private-key", {
+          walletType: this.walletType,
+          accountIndex,
+          slip44: chain.slip44,
+          chainId: chain.chainId,
+          pkLen: privateKey?.length,
+        });
         return KeyPair.fromPrivateKey(privateKey, chain.slip44);
+      }
       default:
         throw new Error(`Invalid wallet type ${WalletTypes[this.walletType]}`);
     }
@@ -272,15 +293,120 @@ export class Wallet implements IWalletState {
 
   async revealKeypairWithSlip44(accountIndex: number, slip44: number): Promise<KeyPair> {
     switch (this.walletType) {
-      case WalletTypes.SecretPhrase:
+      case WalletTypes.SecretPhrase: {
         const seed = await this.#session.getVault();
+        logWallet("revealKeypairWithSlip44:from-seed", {
+          walletType: this.walletType,
+          accountIndex,
+          slip44,
+          seedLen: seed?.length,
+        });
         return KeyPair.fromSeed(seed, slip44, accountIndex);
-      case WalletTypes.SecretKey:
+      }
+      case WalletTypes.SecretKey: {
         const privateKey = await this.#session.getVault();
+        logWallet("revealKeypairWithSlip44:from-private-key", {
+          walletType: this.walletType,
+          accountIndex,
+          slip44,
+          pkLen: privateKey?.length,
+        });
         return KeyPair.fromPrivateKey(privateKey, slip44);
+      }
       default:
         throw new Error(`Invalid wallet type ${WalletTypes[this.walletType]}`);
     }
+  }
+
+  /**
+   * Resolves a KeyPair for an account, trying multiple slip44 derivation paths.
+   * Handles the case where an account was created with one derivation path
+   * (e.g. ETHEREUM m/44'/60'/...) but is being used on a chain with a different
+   * slip44 (e.g. ZILLIQA m/44'/313'/...).
+   *
+   * @param accountIndex — index of the account
+   * @param primaryChain — chain to try first (uses its slip44)
+   * @param allSlip44s — all slip44 values to try as fallback
+   * @param intendedSigningType — \"schnorr\" or \"eip191\", to force correct slip44 for signing
+   */
+  async resolveKeypair(
+    accountIndex: number,
+    primaryChain: ChainConfig,
+    allSlip44s: ReadonlySet<number>,
+    intendedSigningType: Readonly<"schnorr" | "eip191">,
+  ): Promise<KeyPair> {
+    const account = this.accounts[accountIndex];
+
+    // 1) Try primary chain's slip44 first
+    let keyPair = await this.revealKeypair(accountIndex, primaryChain);
+    const derivedAddrObj = await Address.fromPubKeyType(keyPair.pubKey, account.addrType);
+    const derivedAddr = await derivedAddrObj.autoFormat();
+
+    logWallet("resolveKeypair:primary-try", {
+      accountIndex,
+      accountAddr: account.addr,
+      accountAddrType: account.addrType,
+      primarySlip44: primaryChain.slip44,
+      derivedAddr,
+      match: compareAddresses(account.addr, account.addrType, derivedAddr),
+    });
+
+    if (compareAddresses(account.addr, account.addrType, derivedAddr)) {
+      return keyPair;
+    }
+
+    // 2) Fallback: try all other slip44s (Set already handles dedup)
+    for (const slip44 of allSlip44s) {
+      if (slip44 === primaryChain.slip44) continue; // already tried
+
+      try {
+        const probeKeyPair = await this.revealKeypairWithSlip44(accountIndex, slip44);
+        const probeAddrObj = await Address.fromPubKeyType(probeKeyPair.pubKey, account.addrType);
+        const probeFormatted = await probeAddrObj.autoFormat();
+
+        const matches = compareAddresses(account.addr, account.addrType, probeFormatted);
+
+        logWallet("resolveKeypair:fallback-probe", {
+          accountIndex,
+          slip44,
+          probeFormatted,
+          matches,
+          accountAddr: account.addr,
+        });
+
+        if (matches) {
+          // Force correct slip44 for signing algorithm:
+          // - Schnorr (scilla/ZIL txs) → ZILLIQA slip44
+          // - EIP-191 (EVM txs) → ETHEREUM slip44
+          const effectiveSlip44 =
+            intendedSigningType === "schnorr" ? ZILLIQA : ETHEREUM;
+          keyPair = await KeyPair.fromPrivateKey(probeKeyPair.privateKey, effectiveSlip44);
+
+          logWallet("resolveKeypair:match-found", {
+            accountIndex,
+            originalSlip44: slip44,
+            effectiveSlip44,
+            intendedSigningType,
+            matchedAddr: probeFormatted,
+          });
+          return keyPair;
+        }
+      } catch (err) {
+        logWallet("resolveKeypair:probe-error", {
+          accountIndex,
+          slip44,
+          error: String(err),
+        });
+      }
+    }
+
+    logWallet("resolveKeypair:exhausted", {
+      accountIndex,
+      accountAddr: account.addr,
+      accountAddrType: account.addrType,
+      triedSlip44s: Array.from(allSlip44s),
+    });
+    throw new Error(ConnectError.AddressMismatch);
   }
 
   async revealMnemonic(password: Uint8Array, chain: ChainConfig): Promise<string> {

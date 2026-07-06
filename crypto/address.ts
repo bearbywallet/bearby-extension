@@ -9,6 +9,9 @@ import { KeyPair } from "./keypair";
 import { HRP } from "lib/zilliqa/config";
 import { hasHexPrefix, hexToUint8Array, uint8ArrayToHex } from "lib/utils/hex";
 import { AddressType } from "config/wallet";
+import { createStepLogger } from "lib/utils/debug-log";
+
+const logAddress = createStepLogger("Address");
 
 export class Address {
   readonly #bytes: Uint8Array;
@@ -50,16 +53,29 @@ export class Address {
   }
 
   static async fromPubKeyType(pubKey: Uint8Array, addressType: AddressType) {
+    logAddress("fromPubKeyType", {
+      addressType,
+      pubKeyLen: pubKey?.length,
+    });
     switch (addressType) {
-      case AddressType.Bech32:
+      case AddressType.Bech32: {
         const zilBytes = await fromZilPubKey(pubKey);
-
+        logAddress("fromPubKeyType:bech32", {
+          addressType,
+          bytesLen: zilBytes?.length,
+        });
         return new Address(zilBytes, addressType);
-      case AddressType.EthCheckSum:
+      }
+      case AddressType.EthCheckSum: {
         const ethChecsumAddress = ethAddr.fromPublicKey(pubKey);
         const ethBytes = hexToUint8Array(ethChecsumAddress);
-
+        logAddress("fromPubKeyType:eth", {
+          addressType,
+          ethChecksum: ethChecsumAddress,
+          bytesLen: ethBytes?.length,
+        });
         return new Address(ethBytes, addressType);
+      }
     }
   }
 
@@ -90,12 +106,19 @@ export class Address {
   }
 
   async autoFormat() {
-    switch (this.#type) {
-      case AddressType.Bech32:
-        return this.toZilBech32();
-      case AddressType.EthCheckSum:
-        return this.toEthChecksum();
-    }
+    const result = await (async () => {
+      switch (this.#type) {
+        case AddressType.Bech32:
+          return this.toZilBech32();
+        case AddressType.EthCheckSum:
+          return this.toEthChecksum();
+      }
+    })();
+    logAddress("autoFormat", {
+      type: this.#type,
+      result,
+    });
+    return result;
   }
 
   async toEthChecksum(): Promise<string> {

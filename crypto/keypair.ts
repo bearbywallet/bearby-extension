@@ -11,6 +11,9 @@ import { randomBytes } from "./random";
 import { Address } from "./address";
 import { AddressType } from "config/wallet";
 import type { IKeyPair } from "types/wallet";
+import { createStepLogger } from "lib/utils/debug-log";
+
+const logKeypair = createStepLogger("KeyPair");
 
 export class KeyPair {
   #privateKey: Uint8Array;
@@ -39,6 +42,11 @@ export class KeyPair {
   }
 
   static async fromPrivateKey(privateKey: Uint8Array, slip44: number) {
+    logKeypair("fromPrivateKey", {
+      slip44,
+      addressType: KeyPair.addressType(slip44),
+      pkLen: privateKey?.length,
+    });
     const pubKey = await deriveFromPrivateKeyPublicKey(privateKey, slip44);
 
     return new KeyPair(privateKey, pubKey, slip44);
@@ -53,7 +61,15 @@ export class KeyPair {
 
   static async fromSeed(seed: Uint8Array, slip44: number, index: number) {
     const hdPath = new DerivationPath(slip44, index);
-    const privateKey = await derivePrivateKey(seed, hdPath.getPath());
+    const path = hdPath.getPath();
+    logKeypair("fromSeed", {
+      slip44,
+      index,
+      derivationPath: path,
+      addressType: KeyPair.addressType(slip44),
+      seedLen: seed?.length,
+    });
+    const privateKey = await derivePrivateKey(seed, path);
     const pubKey = await deriveFromPrivateKeyPublicKey(privateKey, slip44);
 
     return new KeyPair(privateKey, pubKey, slip44);
@@ -82,11 +98,22 @@ export class KeyPair {
   }
 
   async address(): Promise<Address> {
-    return await Address.fromPubKey(this.pubKey, this.slip44);
+    const addr = await Address.fromPubKey(this.pubKey, this.slip44);
+    logKeypair("address", {
+      slip44: this.#slip44,
+      addressType: this.addressType(),
+    });
+    return addr;
   }
 
   async signMessage(msg: Uint8Array) {
-    switch (this.addressType()) {
+    const addrType = this.addressType();
+    logKeypair("signMessage", {
+      slip44: this.#slip44,
+      addressType: addrType,
+      msgLen: msg.length,
+    });
+    switch (addrType) {
       case AddressType.Bech32:
         const sigZil = await sign(msg, this.privateKey);
         return Uint8Array.from(sigZil.toBytes());
@@ -97,6 +124,11 @@ export class KeyPair {
   }
 
   signDataEIP712(typedData: TypedData<any, any>): Uint8Array {
+    logKeypair("signDataEIP712", {
+      slip44: this.#slip44,
+      addressType: this.addressType(),
+      primaryType: typeof typedData?.primaryType === "string" ? typedData.primaryType : undefined,
+    });
     const entropy = randomBytes(120);
     const signature = signTyped(typedData, this.privateKey, entropy);
     return hexToUint8Array(signature);

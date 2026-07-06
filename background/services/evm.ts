@@ -31,8 +31,9 @@ import type { EvmAddChainParams } from "types/chain";
 import type { ParamsWatchAsset } from "types/token";
 import { eip191Signer, verifyTyped } from "micro-eth-signer";
 import { encoder, getDomainType } from "micro-eth-signer/core/typed-data";
-import { Address } from "crypto/address";
-import { KeyPair } from "crypto/keypair";
+import { createStepLogger } from "lib/utils/debug-log";
+
+const logEvmStep = createStepLogger("EvmService");
 
 export class EvmService {
   #state: BackgroundState;
@@ -343,6 +344,14 @@ export class EvmService {
     sig?: string,
   ) {
     try {
+      logEvmStep("eth_sign:start", {
+        uuid,
+        walletIndex,
+        accountIndex,
+        approve,
+        hasLedgerSig: Boolean(sig),
+      });
+
       const wallet = this.#state.wallets[walletIndex];
 
       if (!wallet) {
@@ -358,7 +367,18 @@ export class EvmService {
         throw new Error(`${ConnectError.RequestNotFound}: ${uuid}`);
       }
 
+      logEvmStep("eth_sign:context", {
+        uuid,
+        walletType: wallet.walletType,
+        accountAddr: account.addr,
+        accountAddrType: account.addrType,
+        accountSlip44: account.slip44,
+        accountIndex: account.index,
+        messageHashLen: evmMessage.signMessageEVM.messageHash?.length,
+      });
+
       if (!approve) {
+        logEvmStep("eth_sign:rejected", { uuid });
         this.#sendError(
           uuid,
           evmMessage.signMessageEVM.domain,
@@ -372,9 +392,16 @@ export class EvmService {
           throw new Error(ConnectError.ChainNotFound);
         }
 
+        logEvmStep("eth_sign:default-chain", {
+          uuid,
+          defaultChainSlip44: defaultChain.slip44,
+          defaultChainChainId: defaultChain.chainId,
+        });
+
         let signature: string;
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
+          logEvmStep("eth_sign:ledger-verify", { uuid, sigLen: sig.length });
           const messageBytes = messageToUint8Array(
             evmMessage.signMessageEVM.messageHash,
           );
@@ -384,27 +411,25 @@ export class EvmService {
           }
           signature = sig;
         } else {
-          const nativeKeyPair = await wallet.revealKeypair(
+          const allSlip44s = new Set(this.#state.chains.map((c) => c.slip44));
+          const keyPair = await wallet.resolveKeypair(
             account.index,
             defaultChain,
+            allSlip44s,
+            "eip191",
           );
-          const keyPair = await KeyPair.fromPrivateKey(
-            nativeKeyPair.privateKey,
-            ETHEREUM,
-          );
-          const derivedAddr = await Address.fromPubKeyType(
-            keyPair.pubKey,
-            account.addrType,
-          );
-          const addr = await derivedAddr.autoFormat();
-          if (!account.addr.includes(addr)) {
-            throw new Error(ConnectError.AddressMismatch);
-          }
+
+          logEvmStep("eth_sign:keypair-resolved", {
+            uuid,
+            keyPairSlip44: keyPair.slip44,
+          });
+
           const hashBuffer = messageToUint8Array(
             evmMessage.signMessageEVM.messageHash,
           );
           const s = await keyPair.signMessage(hashBuffer);
           signature = uint8ArrayToHex(s, true);
+          logEvmStep("eth_sign:signed", { uuid, sigLen: signature.length });
         }
 
         this.#sendSuccess(uuid, evmMessage.signMessageEVM.domain, signature);
@@ -414,6 +439,7 @@ export class EvmService {
       await this.#state.sync();
       sendResponse({ resolve: wallet.confirm });
     } catch (e) {
+      logEvmStep("eth_sign:error", { uuid, error: String(e) });
       sendResponse({ reject: String(e) });
     }
   }
@@ -427,6 +453,14 @@ export class EvmService {
     sig?: string,
   ) {
     try {
+      logEvmStep("personal_sign:start", {
+        uuid,
+        walletIndex,
+        accountIndex,
+        approve,
+        hasLedgerSig: Boolean(sig),
+      });
+
       const wallet = this.#state.wallets[walletIndex];
 
       if (!wallet) {
@@ -442,7 +476,18 @@ export class EvmService {
         throw new Error(`${ConnectError.RequestNotFound}: ${uuid}`);
       }
 
+      logEvmStep("personal_sign:context", {
+        uuid,
+        walletType: wallet.walletType,
+        accountAddr: account.addr,
+        accountAddrType: account.addrType,
+        accountSlip44: account.slip44,
+        accountIndex: account.index,
+        messageLen: evmMessage.signPersonalMessageEVM.message?.length,
+      });
+
       if (!approve) {
+        logEvmStep("personal_sign:rejected", { uuid });
         this.#sendError(
           uuid,
           evmMessage.signPersonalMessageEVM.domain,
@@ -456,6 +501,12 @@ export class EvmService {
           throw new Error(ConnectError.ChainNotFound);
         }
 
+        logEvmStep("personal_sign:default-chain", {
+          uuid,
+          defaultChainSlip44: defaultChain.slip44,
+          defaultChainChainId: defaultChain.chainId,
+        });
+
         let signature: string;
 
         const messageBytes = messageToUint8Array(
@@ -463,30 +514,29 @@ export class EvmService {
         );
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
+          logEvmStep("personal_sign:ledger-verify", { uuid, sigLen: sig.length });
           let verify = eip191Signer.verify(sig, messageBytes, account.addr);
           if (!verify) {
             throw new Error(ConnectError.InvalidSig);
           }
           signature = sig;
         } else {
-          const nativeKeyPair = await wallet.revealKeypair(
+          const allSlip44s = new Set(this.#state.chains.map((c) => c.slip44));
+          const keyPair = await wallet.resolveKeypair(
             account.index,
             defaultChain,
+            allSlip44s,
+            "eip191",
           );
-          const keyPair = await KeyPair.fromPrivateKey(
-            nativeKeyPair.privateKey,
-            ETHEREUM,
-          );
-          const derivedAddr = await Address.fromPubKeyType(
-            keyPair.pubKey,
-            account.addrType,
-          );
-          const addr = await derivedAddr.autoFormat();
-          if (!account.addr.includes(addr)) {
-            throw new Error(ConnectError.AddressMismatch);
-          }
+
+          logEvmStep("personal_sign:keypair-resolved", {
+            uuid,
+            keyPairSlip44: keyPair.slip44,
+          });
+
           const s = await keyPair.signMessage(messageBytes);
           signature = uint8ArrayToHex(s, true);
+          logEvmStep("personal_sign:signed", { uuid, sigLen: signature.length });
         }
 
         this.#sendSuccess(
@@ -500,6 +550,7 @@ export class EvmService {
       await this.#state.sync();
       sendResponse({ resolve: wallet.confirm });
     } catch (e) {
+      logEvmStep("personal_sign:error", { uuid, error: String(e) });
       sendResponse({ reject: String(e) });
     }
   }
@@ -513,6 +564,14 @@ export class EvmService {
     sig?: string,
   ) {
     try {
+      logEvmStep("signTypedData_v4:start", {
+        uuid,
+        walletIndex,
+        accountIndex,
+        approve,
+        hasLedgerSig: Boolean(sig),
+      });
+
       const wallet = this.#state.wallets[walletIndex];
 
       if (!wallet) {
@@ -528,7 +587,19 @@ export class EvmService {
         throw new Error(`${ConnectError.RequestNotFound}: ${uuid}`);
       }
 
+      logEvmStep("signTypedData_v4:context", {
+        uuid,
+        walletType: wallet.walletType,
+        accountAddr: account.addr,
+        accountAddrType: account.addrType,
+        accountSlip44: account.slip44,
+        accountIndex: account.index,
+        typedDataLen: evmTypedData.signTypedDataJsonEVM.typedData?.length,
+        domainSeparator: evmTypedData.signTypedDataJsonEVM.domainSeparator,
+      });
+
       if (!approve) {
+        logEvmStep("signTypedData_v4:rejected", { uuid });
         this.#sendError(
           uuid,
           evmTypedData.signTypedDataJsonEVM.domain,
@@ -542,9 +613,16 @@ export class EvmService {
           throw new Error(ConnectError.ChainNotFound);
         }
 
+        logEvmStep("signTypedData_v4:default-chain", {
+          uuid,
+          defaultChainSlip44: defaultChain.slip44,
+          defaultChainChainId: defaultChain.chainId,
+        });
+
         let signature: string;
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
+          logEvmStep("signTypedData_v4:ledger-verify", { uuid, sigLen: sig.length });
           const typedData = JSON.parse(
             evmTypedData.signTypedDataJsonEVM.typedData,
           );
@@ -554,27 +632,25 @@ export class EvmService {
           }
           signature = sig;
         } else {
-          const nativeKeyPair = await wallet.revealKeypair(
+          const allSlip44s = new Set(this.#state.chains.map((c) => c.slip44));
+          const keyPair = await wallet.resolveKeypair(
             account.index,
             defaultChain,
+            allSlip44s,
+            "eip191",
           );
-          const keyPair = await KeyPair.fromPrivateKey(
-            nativeKeyPair.privateKey,
-            ETHEREUM,
-          );
-          const derivedAddr = await Address.fromPubKeyType(
-            keyPair.pubKey,
-            account.addrType,
-          );
-          const addr = await derivedAddr.autoFormat();
-          if (!account.addr.includes(addr)) {
-            throw new Error(ConnectError.AddressMismatch);
-          }
+
+          logEvmStep("signTypedData_v4:keypair-resolved", {
+            uuid,
+            keyPairSlip44: keyPair.slip44,
+          });
+
           const typedData = JSON.parse(
             evmTypedData.signTypedDataJsonEVM.typedData,
           );
           const s = keyPair.signDataEIP712(typedData);
           signature = uint8ArrayToHex(s, true);
+          logEvmStep("signTypedData_v4:signed", { uuid, sigLen: signature.length });
         }
 
         this.#sendSuccess(
@@ -589,6 +665,7 @@ export class EvmService {
       await this.#state.sync();
       sendResponse({ resolve: wallet.confirm });
     } catch (e) {
+      logEvmStep("signTypedData_v4:error", { uuid, error: String(e) });
       sendResponse({ reject: String(e) });
     }
   }
@@ -614,10 +691,24 @@ export class EvmService {
           ? account.addr.split(":").at(-1)
           : account.addr;
 
+      logEvmStep("handleEthSign:address-check", {
+        uuid: msg.uuid,
+        requestedAddr: address,
+        currentAddress,
+        accountAddr: account.addr,
+        accountSlip44: account.slip44,
+        isZilliqa: account.slip44 === ZILLIQA,
+      });
+
       if (
         !currentAddress ||
         currentAddress?.toLowerCase() !== address.toLowerCase()
       ) {
+        logEvmStep("handleEthSign:address-mismatch", {
+          uuid: msg.uuid,
+          requestedAddr: address,
+          currentAddress,
+        });
         throw new Error(ConnectError.AddressMismatch);
       }
 
@@ -672,10 +763,24 @@ export class EvmService {
           ? account.addr.split(":").at(-1)
           : account.addr;
 
+      logEvmStep("handlePersonalSign:address-check", {
+        uuid: msg.uuid,
+        requestedAddr: address,
+        currentAddress,
+        accountAddr: account.addr,
+        accountSlip44: account.slip44,
+        isZilliqa: account.slip44 === ZILLIQA,
+      });
+
       if (
         !currentAddress ||
         currentAddress?.toLowerCase() !== address.toLowerCase()
       ) {
+        logEvmStep("handlePersonalSign:address-mismatch", {
+          uuid: msg.uuid,
+          requestedAddr: address,
+          currentAddress,
+        });
         throw new Error(ConnectError.AddressMismatch);
       }
 
@@ -718,7 +823,20 @@ export class EvmService {
       const typedDataJson = String(params[1]);
       const account = wallet.accounts[wallet.selectedAccount];
 
+      logEvmStep("handleSignTypedDataV4:address-check", {
+        uuid: msg.uuid,
+        requestedAddr: address,
+        accountAddr: account.addr,
+        accountSlip44: account.slip44,
+        includes: account.addr.toLowerCase().includes(address.toLowerCase()),
+      });
+
       if (!account.addr.toLowerCase().includes(address.toLowerCase())) {
+        logEvmStep("handleSignTypedDataV4:address-mismatch", {
+          uuid: msg.uuid,
+          requestedAddr: address,
+          accountAddr: account.addr,
+        });
         throw new Error(ConnectError.AddressMismatch);
       }
 
@@ -785,10 +903,24 @@ export class EvmService {
           ? account.addr.split(":").at(-1)
           : account.addr;
 
+      logEvmStep("handleSendTransaction:address-check", {
+        uuid: msg.uuid,
+        txFrom: txParams.from,
+        currentAddress,
+        accountAddr: account.addr,
+        accountSlip44: account.slip44,
+        isZilliqa: account.slip44 === ZILLIQA,
+      });
+
       if (
         txParams.from &&
         !currentAddress?.toLowerCase().includes(txParams.from.toLowerCase())
       ) {
+        logEvmStep("handleSendTransaction:address-mismatch", {
+          uuid: msg.uuid,
+          txFrom: txParams.from,
+          currentAddress,
+        });
         throw new Error(ConnectError.AddressMismatch);
       }
 

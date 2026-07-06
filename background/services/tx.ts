@@ -18,7 +18,10 @@ import { MTypePopup } from "config/stream";
 import { ConnectError } from "config/errors";
 import { bip32asUInt8Array } from "ledger/bip32";
 import { HRP } from "lib/zilliqa";
+import { createStepLogger } from "lib/utils/debug-log";
 
+
+const logTxStep = createStepLogger("TransactionService");
 
 export class TransactionService {
   #state: BackgroundState;
@@ -77,72 +80,88 @@ export class TransactionService {
 
   async signTxAndbroadcastJsonRPC(confirmIndex: number, walletIndex: number, accountIndex: number, sendResponse: StreamResponse, sig?: string) {
     try {
+      logTxStep("start", {
+        confirmIndex,
+        walletIndex,
+        accountIndex,
+        hasSig: Boolean(sig),
+      });
+
       const wallet = this.#state.wallets[walletIndex];
       await wallet.trhowSession();
       const account = wallet.accounts[accountIndex];
-      const confirm= wallet.confirm[confirmIndex];
+      const confirm = wallet.confirm[confirmIndex];
 
       const chainConfig = this.#state.getChain(account.chainHash)!;
       const defaultChainConfig = this.#state.getChain(wallet.defaultChainHash)!;
 
       const provider = new NetworkProvider(chainConfig);
-      const metadata  = confirm.metadata!; 
+      const metadata = confirm.metadata!;
       const scilla = confirm.scilla ? ZILTransactionRequest.from(confirm.scilla) : undefined;
       const evm = confirm.evm;
       const txReq = new TransactionRequest(metadata, scilla, evm);
 
+      logTxStep("context-loaded", {
+        walletType: wallet.walletType,
+        accountAddr: account.addr,
+        accountAddrType: account.addrType,
+        accountSlip44: account.slip44,
+        accountChainHash: account.chainHash,
+        accountIndex: account.index,
+        hasPubKey: Boolean(account.pubKey),
+        pubKeyLen: account.pubKey?.length ?? 0,
+        chainConfigSlip44: chainConfig.slip44,
+        chainConfigChainId: chainConfig.chainId,
+        chainConfigChainIds: chainConfig.chainIds,
+        defaultChainSlip44: defaultChainConfig.slip44,
+        defaultChainChainId: defaultChainConfig.chainId,
+        hasScilla: Boolean(scilla),
+        hasEvm: Boolean(evm),
+      });
+
       let signedTx: SignedTransaction;
 
       if (wallet.walletType == WalletTypes.Ledger && sig) {
+        logTxStep("ledger-path", {
+          walletType: wallet.walletType,
+          sigLen: sig.length,
+        });
         signedTx = await txReq.withSignature(sig, account.pubKey);
         await signedTx.verify();
+        logTxStep("ledger-signed-and-verified", {});
       } else {
-        let keyPair = await wallet.revealKeypair(account.index, chainConfig);
-        const derivedAddr = await Address.fromPubKeyType(keyPair.pubKey, account.addrType);
-        let addr = await derivedAddr.autoFormat();
+        const allSlip44s = new Set(this.#state.chains.map((c) => c.slip44));
+        const intendedSigningType = scilla ? ("schnorr" as const) : ("eip191" as const);
+        const keyPair = await wallet.resolveKeypair(
+          account.index,
+          chainConfig,
+          allSlip44s,
+          intendedSigningType,
+        );
 
-        if (account.addr.toLowerCase() !== addr.toLowerCase()) {
-          const slip44s = Array.from(new Set([
-            chainConfig.slip44,
-            defaultChainConfig.slip44,
-            ...this.#state.chains.map((chain) => chain.slip44),
-          ]));
-          const triedSlip44s: Array<{ slip44: number; derivedAddress?: string; error?: string }> = [];
-          let matchedSlip44: number | null = null;
-
-          for (const slip44 of slip44s) {
-            try {
-              const probeKeyPair = await wallet.revealKeypairWithSlip44(account.index, slip44);
-              const probeAddr = await Address.fromPubKeyType(probeKeyPair.pubKey, account.addrType);
-              const probeFormatted = await probeAddr.autoFormat();
-
-              triedSlip44s.push({ slip44, derivedAddress: probeFormatted });
-
-              if (account.addr.toLowerCase() === probeFormatted.toLowerCase()) {
-                keyPair = probeKeyPair;
-                addr = probeFormatted;
-                matchedSlip44 = slip44;
-                break;
-              }
-            } catch (err) {
-              triedSlip44s.push({ slip44, error: String(err) });
-            }
-          }
-
-          if (matchedSlip44 === null) {
-            throw new Error(ConnectError.AddressMismatch);
-          }
-
-        }
-
+        logTxStep("signing", {
+          keyPairSlip44: keyPair.slip44,
+          txType: scilla ? "scilla" : evm ? "evm" : "unknown",
+        });
         signedTx = await txReq.sign(keyPair);
+        logTxStep("signed", { transactionType: scilla ? "scilla" : "evm" });
       }
+
+      logTxStep("broadcasting", {
+        transactionType: scilla ? "scilla" : "evm",
+        domain: confirm.metadata?.domain,
+      });
 
       const [history] = await provider.broadcastSignedTransactions([signedTx]);
 
       this.#state.wallets[walletIndex].history.push(history);
       this.#state.wallets[walletIndex].confirm.splice(confirmIndex, 1);
       await this.#state.sync();
+
+      logTxStep("broadcast-success", {
+        txHash: history.scilla?.hash ?? history.evm?.transactionHash,
+        confirmRemaining: wallet.confirm.length,
+      });
 
       if (confirm && confirm.scilla && confirm.uuid && confirm.metadata?.domain) {
         new TabsMessage({
@@ -166,6 +185,12 @@ export class TransactionService {
         resolve: history,
       });
     } catch (err) {
+      logTxStep("error", {
+        confirmIndex,
+        walletIndex,
+        accountIndex,
+        error: String(err),
+      });
       sendResponse({ reject: String(err) });
     }
   }
