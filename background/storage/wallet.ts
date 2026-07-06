@@ -245,10 +245,6 @@ export class Wallet implements IWalletState {
   }
 
   async revealKeypair(accountIndex: number, chain: ChainConfig): Promise<KeyPair> {
-    if (chain.hash() !== this.defaultChainHash) {
-      throw new Error(ConnectError.DefaultChainNotValid);
-    }
-
     switch (this.walletType) {
       case WalletTypes.SecretPhrase:
         const seed = await this.#session.getVault();
@@ -269,6 +265,19 @@ export class Wallet implements IWalletState {
 
         this.accounts.push(nextAccount);
         break;
+      default:
+        throw new Error(`Invalid wallet type ${WalletTypes[this.walletType]}`);
+    }
+  }
+
+  async revealKeypairWithSlip44(accountIndex: number, slip44: number): Promise<KeyPair> {
+    switch (this.walletType) {
+      case WalletTypes.SecretPhrase:
+        const seed = await this.#session.getVault();
+        return KeyPair.fromSeed(seed, slip44, accountIndex);
+      case WalletTypes.SecretKey:
+        const privateKey = await this.#session.getVault();
+        return KeyPair.fromPrivateKey(privateKey, slip44);
       default:
         throw new Error(`Invalid wallet type ${WalletTypes[this.walletType]}`);
     }

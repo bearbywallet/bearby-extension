@@ -97,12 +97,42 @@ export class TransactionService {
         signedTx = await txReq.withSignature(sig, account.pubKey);
         await signedTx.verify();
       } else {
-        const keyPair = await wallet.revealKeypair(account.index, defaultChainConfig);
+        let keyPair = await wallet.revealKeypair(account.index, chainConfig);
         const derivedAddr = await Address.fromPubKeyType(keyPair.pubKey, account.addrType);
-        const addr = await derivedAddr.autoFormat();
+        let addr = await derivedAddr.autoFormat();
 
-        if (!account.addr.includes(addr)) {
-          throw new Error(ConnectError.AddressMismatch);
+        if (account.addr.toLowerCase() !== addr.toLowerCase()) {
+          const slip44s = Array.from(new Set([
+            chainConfig.slip44,
+            defaultChainConfig.slip44,
+            ...this.#state.chains.map((chain) => chain.slip44),
+          ]));
+          const triedSlip44s: Array<{ slip44: number; derivedAddress?: string; error?: string }> = [];
+          let matchedSlip44: number | null = null;
+
+          for (const slip44 of slip44s) {
+            try {
+              const probeKeyPair = await wallet.revealKeypairWithSlip44(account.index, slip44);
+              const probeAddr = await Address.fromPubKeyType(probeKeyPair.pubKey, account.addrType);
+              const probeFormatted = await probeAddr.autoFormat();
+
+              triedSlip44s.push({ slip44, derivedAddress: probeFormatted });
+
+              if (account.addr.toLowerCase() === probeFormatted.toLowerCase()) {
+                keyPair = probeKeyPair;
+                addr = probeFormatted;
+                matchedSlip44 = slip44;
+                break;
+              }
+            } catch (err) {
+              triedSlip44s.push({ slip44, error: String(err) });
+            }
+          }
+
+          if (matchedSlip44 === null) {
+            throw new Error(ConnectError.AddressMismatch);
+          }
+
         }
 
         signedTx = await txReq.sign(keyPair);
@@ -136,7 +166,6 @@ export class TransactionService {
         resolve: history,
       });
     } catch (err) {
-      console.error(err);
       sendResponse({ reject: String(err) });
     }
   }

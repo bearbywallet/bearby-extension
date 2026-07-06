@@ -226,7 +226,6 @@
                 }
             }
         } catch (e) {
-            console.error(e);
             if (!handleSessionError(e)) errorMessage = String(e);
             startPolling();
         } finally {
