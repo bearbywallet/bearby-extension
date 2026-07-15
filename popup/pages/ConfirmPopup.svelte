@@ -18,6 +18,7 @@
     
     import RoundImageButton from '../components/RoundImageButton.svelte';
     import GasEditor from '../modals/GasEditor.svelte';
+    import SpendLimitEditor from '../modals/SpendLimitEditor.svelte';
     import LedgerSignModal from '../modals/LedgerSignModal.svelte';
     import TransferSummary from '../components/TransferSummary.svelte';
     import TransferRoute from '../components/TransferRoute.svelte';
@@ -29,6 +30,10 @@
     import CloseIcon from '../components/icons/Close.svelte';
     import { getGlobalState, setGlobalState } from 'popup/background/wallet';
     import { ETHEREUM } from 'config/slip44';
+    import {
+        encodeERC20Approve,
+        isUnlimitedApproveAmount,
+    } from 'lib/utils/erc20';
 
     let selectedSpeed = $state<GasSpeed>($globalStore.wallets[$globalStore.selectedWallet].settings.gasOption ?? GasSpeed.Market);
     let expandedSpeed = $state<GasSpeed | null>(null);
@@ -37,6 +42,7 @@
     let isLoadingGasFetch = $state(true);
     let errorMessage = $state<string | null>(null);
     let showGasEditor = $state(false);
+    let showSpendLimitEditor = $state(false);
     let showLedgerModal = $state(false);
     let isManualGasEdit = $state(false);
     let countdown = $state(10);
@@ -55,6 +61,15 @@
     const token = $derived(confirmTx?.metadata?.token ?? nativeToken);
     const tokenAmount = $derived(confirmTx?.metadata?.token?.value ?? confirmTx?.evm?.value ?? confirmTx?.scilla?.amount ?? '0');
     const toAddress = $derived(confirmTx?.metadata?.token.recipient ?? confirmTx?.evm?.to ?? confirmTx?.scilla?.toAddr ?? "");
+    const approveInfo = $derived(confirmTx?.metadata?.approve ?? null);
+    const isUnlimitedApprove = $derived.by(() => {
+        if (!approveInfo || !account) return false;
+        try {
+            return isUnlimitedApproveAmount(BigInt(tokenAmount || '0'), account.slip44);
+        } catch {
+            return false;
+        }
+    });
 
     const recipientName = $derived(() => {
         if (!confirmTx) return null;
@@ -109,6 +124,24 @@
 
     function handleGasSave(params: RequiredTxParams) {
         gasEstimate = params;
+    }
+
+    async function handleSpendLimitSave(rawAmount: bigint) {
+        const confirm = $globalStore.wallets[$globalStore.selectedWallet].confirm[confirmLastIndex];
+        if (!confirm?.evm || !confirm.metadata?.approve) return;
+
+        try {
+            confirm.evm.data = encodeERC20Approve(confirm.metadata.approve.spender, rawAmount);
+            confirm.metadata.token.value = rawAmount.toString();
+            await setGlobalState();
+            // re-sync store so summary (tokenAmount / Unlimited) re-renders
+            await getGlobalState();
+            // calldata changed → manually-set gas params are stale
+            isManualGasEdit = false;
+            startPolling();
+        } catch (e) {
+            errorMessage = String(e);
+        }
     }
 
     function handleSessionError(e: unknown) {
@@ -338,7 +371,9 @@
 {:else}
     <div class="page-container">
         <header class="header">
-            <h1 class="title">{confirmTx?.metadata?.title ?? ''}</h1>
+            <h1 class="title">
+                {approveInfo ? $_('confirm.spendingCap.title') : confirmTx?.metadata?.title ?? ''}
+            </h1>
             <div class="header-right">
                 {#if confirmCount > 1}
                     <div class="confirm-counter">
@@ -355,14 +390,20 @@
 
         <main class="content">
             <TransferSummary
-                amount={abbreviateNumber(tokenAmount, token.decimals, $globalStore.abbreviatedNumber)}
+                amount={isUnlimitedApprove
+                    ? $_('confirm.spendingCap.unlimited')
+                    : abbreviateNumber(tokenAmount, token.decimals, $globalStore.abbreviatedNumber)}
                 symbol={token.symbol}
-                fiatValue={tokenFiatValue()}
+                fiatValue={isUnlimitedApprove ? '-' : tokenFiatValue()}
+                onEdit={approveInfo ? () => { showSpendLimitEditor = true; } : undefined}
+                editAriaLabel={approveInfo ? $_('spendLimitEditor.title') : undefined}
             />
             <TransferRoute
                 fromName={account.name || 'Unknown'}
                 fromAddress={account.addr}
-                toName={recipientName() || 'Unknown'}
+                toName={approveInfo
+                    ? (recipientName() ?? $_('confirm.spendingCap.spender'))
+                    : (recipientName() || 'Unknown')}
                 toAddress={toAddress}
             />
 
@@ -459,6 +500,17 @@
     gasParams={gasEstimate}
     onSave={handleGasSave}
 />
+
+{#if approveInfo && confirmTx?.metadata?.token && account}
+    <SpendLimitEditor
+        bind:show={showSpendLimitEditor}
+        token={confirmTx.metadata.token}
+        spender={approveInfo.spender}
+        currentAmount={tokenAmount}
+        slip44={account.slip44}
+        onSave={handleSpendLimitSave}
+    />
+{/if}
 
 {#if chain}
     <LedgerSignModal

@@ -481,6 +481,11 @@
     "edit": "편집",
     "reject": "거부",
     "confirm": "확인",
+    "spendingCap": {
+      "title": "지출 한도 요청",
+      "unlimited": "무제한",
+      "spender": "지출 계정"
+    },
     "gas": {
       "low": "낮음",
       "market": "시장",
@@ -491,6 +496,17 @@
       "maxFee": "최대 수수료",
       "gasPrice": "가스 가격"
     }
+  },
+  "spendLimitEditor": {
+    "title": "지출 한도 편집",
+    "amount": "지출 한도",
+    "spender": "지출 계정",
+    "max": "무제한으로 설정",
+    "custom": "사용자 지정 금액",
+    "unlimited": "무제한",
+    "invalid": "잘못된 금액",
+    "cancel": "취소",
+    "save": "저장"
   },
   "gasEditor": {
     "title": "가스 매개변수 편집",

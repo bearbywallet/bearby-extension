@@ -9,9 +9,15 @@ import { HistoricalTransaction } from "background/rpc/history_tx";
 import {
   bigintToHex,
   HEX_PREFIX,
+  hexToBigInt,
   hexToUint8Array,
   uint8ArrayToHex,
 } from "lib/utils/hex";
+import {
+  decodeERC20Approve,
+  encodeERC20Approve,
+  maxApproveAmount,
+} from "lib/utils/erc20";
 import { tryHexToUtf8, messageToUint8Array } from "lib/utils/utf8";
 import { TabsMessage } from "lib/streem/tabs-message";
 import { MTypePopup } from "config/stream";
@@ -29,12 +35,14 @@ import {
   FToken,
   Explorer,
   type BackgroundState,
+  type IFTokenState,
 } from "background/storage";
 import type { ProviderService } from "./provider";
 import type { EvmAddChainParams } from "types/chain";
 import type { ParamsWatchAsset } from "types/token";
 import { eip191Signer, verifyTyped } from "micro-eth-signer";
 import { encoder, getDomainType } from "micro-eth-signer/core/typed-data";
+import { Address } from "crypto/address";
 
 
 export class EvmService {
@@ -855,6 +863,14 @@ export class EvmService {
         },
       };
 
+      await this.#tryDetectApprove(
+        txParams,
+        metadata,
+        wallet,
+        chainConfig,
+        account,
+      );
+
       wallet.confirm.push(
         new ConfirmState({
           uuid: msg.uuid,
@@ -874,6 +890,94 @@ export class EvmService {
     } catch (error) {
       this.#sendError(msg.uuid, msg.domain, String(error), 4001);
       sendResponse({ reject: String(error) });
+    }
+  }
+
+  /**
+   * Best-effort ERC-20 approve detection; on any failure the tx
+   * falls back to the generic confirm display. Never throws.
+   */
+  async #tryDetectApprove(
+    txParams: TransactionRequestEVM,
+    metadata: TransactionMetadata,
+    wallet: Wallet,
+    chainConfig: ChainConfig,
+    account: Wallet["accounts"][number],
+  ): Promise<void> {
+    try {
+      if (!txParams.to) return;
+      // a nonzero-value "approve" is not a real approve — leave generic
+      // hexToBigInt maps "0x" / "" → 0n (BigInt("0x") throws and would kill detection)
+      if (txParams.value && hexToBigInt(txParams.value) !== 0n) return;
+
+      const decoded = decodeERC20Approve(txParams.data);
+      if (!decoded) return;
+
+      // Zilliqa ERC-20s cap allowances at uint128; clamp dapp MAX_UINT256 so
+      // eth_estimateGas does not revert with "value greater than uint128 max".
+      const maxAmount = maxApproveAmount(account.slip44);
+      let amount = decoded.amount;
+      if (amount > maxAmount) {
+        amount = maxAmount;
+        txParams.data = encodeERC20Approve(decoded.spender, amount);
+      }
+
+      const spender = await Address.fromStr(decoded.spender).toEthChecksum();
+      const contractAddr = txParams.to.toLowerCase();
+
+      let token: IFTokenState | undefined = wallet.tokens.find(
+        (t) =>
+          t.addr.toLowerCase() === contractAddr &&
+          t.chainHash === account.chainHash,
+      );
+
+      if (!token) {
+        try {
+          const provider = new NetworkProvider(chainConfig);
+          const checksummed = await Address.fromStr(txParams.to).toEthChecksum();
+          // metadata-only batch (name/symbol/decimals), no per-account balance calls
+          // bound wait so a hung RPC cannot delay the confirm popup / dapp response
+          const timeout = new Promise<never>((_, reject) => {
+            setTimeout(
+              () => reject(new Error("token metadata timeout")),
+              3000,
+            );
+          });
+          const [fetched] = await Promise.race([
+            provider.batchFetchTokenMetadata([checksummed], null),
+            timeout,
+          ]);
+          token = fetched;
+        } catch {
+          // fall through to degraded fallback below
+        }
+      }
+
+      if (!token) {
+        token = {
+          name: "Unknown Token",
+          symbol: "TOKEN",
+          decimals: 0,
+          addr: txParams.to,
+          addrType: Address.fromStr(txParams.to).type,
+          logo: null,
+          balances: {},
+          rate: 0,
+          default_: false,
+          native: false,
+          chainHash: account.chainHash,
+        };
+      }
+
+      metadata.token = {
+        ...token,
+        balances: undefined,
+        value: amount.toString(),
+        recipient: spender,
+      };
+      metadata.approve = { spender };
+    } catch {
+      // best-effort: keep generic metadata
     }
   }
 

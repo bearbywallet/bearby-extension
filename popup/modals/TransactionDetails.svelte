@@ -3,6 +3,7 @@
     import { TransactionStatus } from 'config/tx';
     import { formatDate } from 'popup/i18n';
     import { abbreviateNumber } from 'popup/mixins/numbers';
+    import { isUnlimitedApproveAmount } from 'lib/utils/erc20';
     import { processTokenLogo } from 'lib/popup/url';
     import globalStore from 'popup/store/global';
     import { _ } from 'popup/i18n';
@@ -54,6 +55,15 @@
         const value = transaction.metadata.token.value ?? 
                      transaction.evm?.value ?? 
                      transaction.scilla?.amount ?? '0';
+        if (transaction.metadata.approve) {
+            try {
+                if (isUnlimitedApproveAmount(BigInt(value), chain?.slip44)) {
+                    return $_('confirm.spendingCap.unlimited');
+                }
+            } catch {
+                // fall through to numeric format
+            }
+        }
         return abbreviateNumber(value, transaction.metadata.token.decimals, $globalStore.abbreviatedNumber);
     });
 

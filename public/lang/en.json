@@ -481,6 +481,11 @@
     "edit": "Edit",
     "reject": "Reject",
     "confirm": "Confirm",
+    "spendingCap": {
+      "title": "Spending cap request",
+      "unlimited": "Unlimited",
+      "spender": "Spender"
+    },
     "gas": {
       "low": "Low",
       "market": "Market",
@@ -491,6 +496,17 @@
       "maxFee": "Max Fee",
       "gasPrice": "Gas Price"
     }
+  },
+  "spendLimitEditor": {
+    "title": "Edit spending cap",
+    "amount": "Spending cap",
+    "spender": "Spender",
+    "max": "Set Unlimited",
+    "custom": "Set custom amount",
+    "unlimited": "Unlimited",
+    "invalid": "Invalid amount",
+    "cancel": "Cancel",
+    "save": "Save"
   },
   "gasEditor": {
     "title": "Edit Gas Parameters",

@@ -1,12 +1,18 @@
 <script lang="ts">
+    import EditIcon from './icons/Edit.svelte';
+
     let {
         amount,
         symbol,
-        fiatValue
+        fiatValue,
+        onEdit = undefined,
+        editAriaLabel = undefined
     }: {
         amount: string;
         symbol: string;
         fiatValue: string;
+        onEdit?: () => void;
+        editAriaLabel?: string;
     } = $props();
 </script>
 
@@ -14,6 +20,11 @@
     <div class="amount-line">
         <span class="amount">{amount}</span>
         <span class="symbol">{symbol}</span>
+        {#if onEdit}
+            <button class="edit-amount" onclick={onEdit} aria-label={editAriaLabel ?? ''}>
+                <EditIcon />
+            </button>
+        {/if}
     </div>
     <div class="fiat">{fiatValue}</div>
 </div>
@@ -28,6 +39,7 @@
 
     .amount-line {
         display: flex;
+        align-items: center;
         gap: 8px;
     }
 
@@ -43,6 +55,28 @@
         font-size: 28px;
         font-weight: 700;
         line-height: 32px;
+    }
+
+    .edit-amount {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        border-radius: 8px;
+        padding: 4px;
+        color: var(--color-content-text-purple);
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+
+        &:hover {
+            background: var(--color-neutral-background-tertiary);
+        }
+
+        :global(svg) {
+            width: 18px;
+            height: 18px;
+        }
     }
 
     .fiat {

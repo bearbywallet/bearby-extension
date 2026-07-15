@@ -134,6 +134,10 @@ export interface TransactionMetadata {
   title?: string;
   domain?: string;
   token: FTState;
+  /** Present when the tx is an ERC-20 approve(address,uint256) call. */
+  approve?: {
+    readonly spender: string; // EIP-55 checksummed, for display
+  };
 }
 
 export type SignedMessageKind = 'eth_sign' | 'personal_sign' | 'eip712' | 'scilla';

@@ -481,6 +481,11 @@
     "edit": "編集",
     "reject": "拒否",
     "confirm": "確認",
+    "spendingCap": {
+      "title": "使用上限のリクエスト",
+      "unlimited": "無制限",
+      "spender": "使用者"
+    },
     "gas": {
       "low": "低",
       "market": "市場",
@@ -491,6 +496,17 @@
       "maxFee": "最大手数料",
       "gasPrice": "ガス価格"
     }
+  },
+  "spendLimitEditor": {
+    "title": "使用上限を編集",
+    "amount": "使用上限",
+    "spender": "使用者",
+    "max": "無制限に設定",
+    "custom": "カスタム金額を設定",
+    "unlimited": "無制限",
+    "invalid": "無効な金額",
+    "cancel": "キャンセル",
+    "save": "保存"
   },
   "gasEditor": {
     "title": "ガスパラメータを編集",

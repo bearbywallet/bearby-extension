@@ -1,6 +1,7 @@
 <script lang="ts">
     import { formatDate, _ } from 'popup/i18n';
     import { abbreviateNumber } from 'popup/mixins/numbers';
+    import { isUnlimitedApproveAmount } from 'lib/utils/erc20';
     import { processTokenLogo } from 'lib/popup/url';
     import globalStore from 'popup/store/global';
     import FastImg from './FastImg.svelte';
@@ -19,6 +20,16 @@
         const value = transaction.metadata.token.value ?? 
                      transaction.evm?.value ?? 
                      transaction.scilla?.amount ?? '0';
+        // Unlimited approve: Number() overflows MAX_UINT128/256 → garbage history text
+        if (transaction.metadata.approve) {
+            try {
+                if (isUnlimitedApproveAmount(BigInt(value))) {
+                    return $_('confirm.spendingCap.unlimited');
+                }
+            } catch {
+                // fall through to numeric format
+            }
+        }
         return abbreviateNumber(value, transaction.metadata.token.decimals, $globalStore.abbreviatedNumber);
     });
 
