@@ -17,6 +17,9 @@ import { KeyPair } from "../../crypto/keypair";
 import { EvmMethods, ZilMethods } from "../../config/jsonrpc";
 import { ETHEREUM, ZILLIQA } from "../../config/slip44";
 import { hexToUint8Array } from "../../lib/utils/hex";
+import { hashAddress } from "../../lib/utils/hashing";
+import { toQueryAccount } from "../../background/rpc/query_account";
+import { queryAccountFromPubKey } from "../data";
 import type { JsonRPCResponse } from "../../background/rpc/provider";
 
 const pubKeyBytes = hexToUint8Array("03b0194095e799a6a5f2e81a79fde0a927906c130520f050db263f0d9acbece1ba");
@@ -24,6 +27,8 @@ const createEthAddress = () =>
   Address.fromPubKey(pubKeyBytes, ETHEREUM);
 const createZilAddress = () =>
 Address.fromPubKey(pubKeyBytes, ZILLIQA);
+
+const createQueryAccount = () => queryAccountFromPubKey(pubKeyBytes);
 
 describe("ft_parser", () => {
   describe("ERC20Helper", () => {
@@ -74,8 +79,8 @@ describe("ft_parser", () => {
   describe("buildTokenRequests", () => {
     it("should build requests for an ETH (ERC20) token", async () => {
       const contract = await createEthAddress();
-      const pubkeys = [pubKeyBytes];
-      const requests = await buildTokenRequests(contract, pubkeys, false);
+      const accounts = [await createQueryAccount()];
+      const requests = await buildTokenRequests(contract, accounts, false);
 
       expect(requests).toHaveLength(4);
 
@@ -95,8 +100,8 @@ describe("ft_parser", () => {
 
     it("should build requests for a native ETH balance", async () => {
       const contract = await createEthAddress();
-      const pubKeys = [pubKeyBytes];
-      const requests = await buildTokenRequests(contract, pubKeys, true);
+      const accounts = [await createQueryAccount()];
+      const requests = await buildTokenRequests(contract, accounts, true);
 
       expect(requests).toHaveLength(4);
       expect(requests[3].payload.method).toBe(EvmMethods.GetBalance);
@@ -104,8 +109,8 @@ describe("ft_parser", () => {
 
     it("should build requests for a ZIL (ZRC2) token", async () => {
       const contract = await createZilAddress();
-      const pubKeys = [pubKeyBytes];
-      const requests = await buildTokenRequests(contract, pubKeys, false);
+      const accounts = [await createQueryAccount()];
+      const requests = await buildTokenRequests(contract, accounts, false);
 
       expect(requests).toHaveLength(2);
       expect(requests[0].payload.method).toBe(ZilMethods.GetSmartContractInit);
@@ -116,12 +121,88 @@ describe("ft_parser", () => {
 
     it("should build requests for a native ZIL balance", async () => {
       const contract = await createZilAddress();
-      const pubkeys = [pubKeyBytes];
-      const requests = await buildTokenRequests(contract, pubkeys, true);
+      const accounts = [await createQueryAccount()];
+      const requests = await buildTokenRequests(contract, accounts, true);
 
       expect(requests).toHaveLength(2);
       expect(requests[0].payload.method).toBe(ZilMethods.GetSmartContractInit);
       expect(requests[1].payload.method).toBe(ZilMethods.GetBalance);
+    });
+
+    it("should build combined addr regression: both zil and eth requests", async () => {
+      const account = await createQueryAccount();
+      const zilContract = await createZilAddress();
+      const ethContract = await createEthAddress();
+
+      const zilRequests = await buildTokenRequests(zilContract, [account], true);
+      const ethRequests = await buildTokenRequests(ethContract, [account], true);
+
+      expect(zilRequests.filter((r) => r.requestType.type === "Balance")).toHaveLength(1);
+      expect(ethRequests.filter((r) => r.requestType.type === "Balance")).toHaveLength(1);
+    });
+  });
+
+  describe("watch accounts (address only, empty pubKey)", () => {
+    it("should query the watched 0x address for a native EVM balance without crashing", async () => {
+      const contract = await createEthAddress();
+      const watchedEth = await (await createEthAddress()).toEthChecksum();
+      const account = toQueryAccount({ addr: watchedEth });
+
+      const requests = await buildTokenRequests(contract, [account], true);
+      const balanceReqs = requests.filter((r) => r.requestType.type === "Balance");
+
+      expect(balanceReqs).toHaveLength(1);
+      expect(balanceReqs[0].payload.method).toBe(EvmMethods.GetBalance);
+      expect(balanceReqs[0].payload.params[0]).toBe(watchedEth);
+    });
+
+    it("should query the watched zil1 address for a native ZIL balance", async () => {
+      const contract = await createZilAddress();
+      const zilAddr = await createZilAddress();
+      const watchedZil = await zilAddr.toZilBech32();
+      const account = toQueryAccount({ addr: watchedZil });
+
+      const requests = await buildTokenRequests(contract, [account], true);
+      const balanceReqs = requests.filter((r) => r.requestType.type === "Balance");
+
+      expect(balanceReqs).toHaveLength(1);
+      expect(balanceReqs[0].payload.method).toBe(ZilMethods.GetBalance);
+      expect(balanceReqs[0].payload.params[0]).toBe(
+        (await zilAddr.toZilChecksum()).toLowerCase(),
+      );
+    });
+
+    it("should skip ZIL requests for a watched 0x address (no derivable zil1)", async () => {
+      const contract = await createZilAddress();
+      const watchedEth = await (await createEthAddress()).toEthChecksum();
+      const account = toQueryAccount({ addr: watchedEth });
+
+      const requests = await buildTokenRequests(contract, [account], true);
+      const balanceReqs = requests.filter((r) => r.requestType.type === "Balance");
+
+      expect(balanceReqs).toHaveLength(0);
+    });
+
+    it("should key balances with hashAddress(account.addr) — same as popup lookup", async () => {
+      const contract = await createEthAddress();
+      const watchedEth = await (await createEthAddress()).toEthChecksum();
+      const account = toQueryAccount({ addr: watchedEth });
+
+      const requests = await buildTokenRequests(contract, [account], true);
+      const balanceReq = requests.find((r) => r.requestType.type === "Balance");
+
+      expect(balanceReq).toBeDefined();
+      if (balanceReq && balanceReq.requestType.type === "Balance") {
+        expect(balanceReq.requestType.addrHash).toBe(hashAddress(watchedEth));
+      }
+    });
+
+    it("should skip a malformed addr part without throwing", async () => {
+      const watchedEth = await (await createEthAddress()).toEthChecksum();
+      const account = toQueryAccount({ addr: `garbage:${watchedEth}` });
+
+      expect(account.ethAddr).toBeDefined();
+      expect(account.zilAddr).toBeUndefined();
     });
   });
 

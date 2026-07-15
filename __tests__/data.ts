@@ -8,6 +8,9 @@ import { GasSpeed } from "../config/gas";
 import { ShaAlgorithms } from "../config/pbkdf2";
 import { HashTypes } from "../config/argon2";
 import { HRP } from "lib/zilliqa";
+import { Address } from "../crypto/address";
+import { ETHEREUM, ZILLIQA } from "../config/slip44";
+import { toQueryAccount, type QueryAccount } from "../background/rpc/query_account";
 
 export const WORDS =
   "rule hard brush glare magic east glimpse tank junk will media submit";
@@ -410,3 +413,11 @@ export const ZLP = new FToken({
   native: false,
   chainHash: 208425510,
 });
+
+export async function queryAccountFromPubKey(pubKey: Uint8Array): Promise<QueryAccount> {
+  const zilAddr = await Address.fromPubKey(pubKey, ZILLIQA);
+  const ethAddr = await Address.fromPubKey(pubKey, ETHEREUM);
+  return toQueryAccount({
+    addr: `${await zilAddr.toZilBech32()}:${await ethAddr.toEthChecksum()}`,
+  });
+}

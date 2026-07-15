@@ -1,4 +1,5 @@
 import { NetworkProvider } from "background/rpc";
+import { toQueryAccounts } from "background/rpc/query_account";
 import type { BackgroundState } from "background/storage";
 import { Address } from "crypto/address";
 import type { StreamResponse } from "lib/streem";
@@ -110,11 +111,14 @@ export class ProviderService {
       await wallet.trhowSession();
       const account = wallet.accounts[wallet.selectedAccount];
       const tokens = wallet.tokens.filter((t) => t.chainHash === account.chainHash);
-      const chainConfig = this.#state.getChain(account.chainHash)!;
+      const chainConfig = this.#state.getChain(account.chainHash);
+      if (!chainConfig) {
+        throw new Error(`Chain ${account.chainHash} not found`);
+      }
       const provider = new NetworkProvider(chainConfig);
-      const keys: Uint8Array[] = wallet.accounts.map((a) => hexToUint8Array(a.pubKey));
+      const accounts = toQueryAccounts(wallet.accounts);
 
-      await provider.updateBalances(tokens, keys);
+      await provider.updateBalances(tokens, accounts);
       await this.#state.sync();
 
       sendResponse({
@@ -171,8 +175,8 @@ export class ProviderService {
       const account = wallet.accounts[wallet.selectedAccount];
       const chainConfig = this.#state.getChain(account.chainHash)!;
       const provider = new NetworkProvider(chainConfig);
-      const pubKeys = wallet.accounts.map((a) => hexToUint8Array(a.pubKey));
-      const metadata = await provider.ftokenMeta(contractAddr, pubKeys);
+      const accounts = toQueryAccounts(wallet.accounts);
+      const metadata = await provider.ftokenMeta(contractAddr, accounts);
 
       sendResponse({
         resolve: metadata,

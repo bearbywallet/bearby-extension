@@ -11,8 +11,8 @@ import { ZILLIQA } from "config/slip44";
 import { AddressType } from "config/wallet";
 import { Address } from "crypto/address";
 import type { StreamResponse } from "lib/streem";
-import { hexToUint8Array } from "lib/utils/hex";
-import { hashXORHex } from "lib/utils/hashing";
+import { hashAddress } from "lib/utils/hashing";
+import { toQueryAccounts } from "background/rpc/query_account";
 import type { NFTMetadata, NFTTokenInfo } from "types/token";
 
 interface ZilstreamToken {
@@ -145,7 +145,7 @@ export class TokenService {
     const result: PortfolioResponse = await response.json();
     const balances = result?.portfolio?.balances ?? [];
 
-    const pubKeyHash = hashXORHex(account.pubKey);
+    const balanceKey = hashAddress(account.addr);
     const defaultLogo = chainConfig.ftokens[0]?.logo ?? null;
 
     return balances
@@ -164,7 +164,7 @@ export class TokenService {
         addr: balance.token.address,
         addrType: account.addrType,
         logo: balance.token.metadata?.logoUrl || defaultLogo,
-        balances: { [pubKeyHash]: balance.amount?.raw ?? "0" },
+        balances: { [balanceKey]: balance.amount?.raw ?? "0" },
         rate: 0,
         default_: false,
         native: false,
@@ -189,11 +189,11 @@ export class TokenService {
       }
 
       const provider = new RpcProvider(chainConfig);
-      const pubKeys = wallet.accounts.map((a) => hexToUint8Array(a.pubKey));
+      const accounts = toQueryAccounts(wallet.accounts);
 
       const requestsWithTypes = await buildNFTRequests(
         contractAddr,
-        pubKeys,
+        accounts,
       );
 
       const payloads = requestsWithTypes.map((r) => r.payload);
@@ -218,7 +218,7 @@ export class TokenService {
           responses[1],
           responses[2],
           baseURI,
-          pubKeys
+          accounts
         );
     
         balances = result.balances;
@@ -242,7 +242,7 @@ export class TokenService {
             const balance = processEthNFTBalanceResponse(response);
         
             if (balance > 0n) {
-              balances[reqWithType.requestType.pubKeyHash] = {};
+              balances[reqWithType.requestType.addrHash] = {};
             }
           }
         });

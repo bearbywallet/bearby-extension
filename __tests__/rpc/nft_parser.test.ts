@@ -16,6 +16,7 @@ import { EvmMethods, ZilMethods } from "../../config/jsonrpc";
 import { ETHEREUM, ZILLIQA } from "../../config/slip44";
 import { hexToUint8Array } from "../../lib/utils/hex";
 import type { JsonRPCResponse } from "../../background/rpc/provider";
+import { queryAccountFromPubKey } from "../data";
 import { NFTStandard } from "config/token";
 
 const pubKeyBytes = hexToUint8Array("03b0194095e799a6a5f2e81a79fde0a927906c130520f050db263f0d9acbece1ba");
@@ -61,9 +62,9 @@ describe("nft_parser", () => {
   describe("buildNFTRequests", () => {
     it("should build requests for an ERC721 NFT", async () => {
       const contract = await createEthAddress();
-      const pubKeys = [pubKeyBytes];
+      const accounts = [await queryAccountFromPubKey(pubKeyBytes)];
 
-      const requests = await buildNFTRequests(contract, pubKeys);
+      const requests = await buildNFTRequests(contract, accounts);
 
       expect(requests.length).toBe(4);
       expect(requests[0].payload.method).toBe(EvmMethods.Call);
@@ -76,9 +77,9 @@ describe("nft_parser", () => {
 
     it("should build requests for a ZRC6 NFT", async () => {
       const contract = await createZilAddress();
-      const pubKeys = [pubKeyBytes];
+      const accounts = [await queryAccountFromPubKey(pubKeyBytes)];
 
-      const requests = await buildNFTRequests(contract, pubKeys);
+      const requests = await buildNFTRequests(contract, accounts);
 
       expect(requests.length).toBe(4);
       expect(requests[0].payload.method).toBe(ZilMethods.GetSmartContractInit);
@@ -91,9 +92,12 @@ describe("nft_parser", () => {
       const contract = await createEthAddress();
       const pubKey1 = hexToUint8Array("03b0194095e799a6a5f2e81a79fde0a927906c130520f050db263f0d9acbece1ba");
       const pubKey2 = hexToUint8Array("02b0194095e799a6a5f2e81a79fde0a927906c130520f050db263f0d9acbece1bb");
-      const pubKeys = [pubKey1, pubKey2];
+      const accounts = [
+        await queryAccountFromPubKey(pubKey1),
+        await queryAccountFromPubKey(pubKey2),
+      ];
 
-      const requests = await buildNFTRequests(contract, pubKeys);
+      const requests = await buildNFTRequests(contract, accounts);
 
       expect(requests.length).toBe(5);
       const balanceRequests = requests.filter(r => r.requestType.type === "Balance");
@@ -302,17 +306,16 @@ describe("nft_parser", () => {
       };
 
       const baseUri = "https://base.com/";
-      const pubKeys = [keypair.pubKey];
+      const accounts = [await queryAccountFromPubKey(keypair.pubKey)];
 
       const result = await processZilNFTBalanceResponse(
         tokenOwnersResponse,
         tokenUrisResponse,
         baseUri,
-        pubKeys
+        accounts
       );
 
-      const pubKeyHash = Number(Object.keys(result.balances)[0]);
-      const userTokens = result.balances[pubKeyHash];
+      const userTokens = result.balances[accounts[0].addrHash];
 
       expect(Object.keys(userTokens).length).toBe(2);
       expect(userTokens["1"].id).toBe("1");
@@ -345,17 +348,16 @@ describe("nft_parser", () => {
       };
 
       const baseUri = "https://base.com/nft/";
-      const pubKeys = [keypair.pubKey];
+      const accounts = [await queryAccountFromPubKey(keypair.pubKey)];
 
       const result = await processZilNFTBalanceResponse(
         tokenOwnersResponse,
         tokenUrisResponse,
         baseUri,
-        pubKeys
+        accounts
       );
 
-      const pubKeyHash = Number(Object.keys(result.balances)[0]);
-      const userTokens = result.balances[pubKeyHash];
+      const userTokens = result.balances[accounts[0].addrHash];
 
       expect(userTokens["10"].url).toBe("https://base.com/nft/10");
     });
@@ -381,17 +383,16 @@ describe("nft_parser", () => {
         },
       };
 
-      const pubKeys = [keypair.pubKey];
+      const accounts = [await queryAccountFromPubKey(keypair.pubKey)];
 
       const result = await processZilNFTBalanceResponse(
         tokenOwnersResponse,
         tokenUrisResponse,
         undefined,
-        pubKeys
+        accounts
       );
 
-      const pubKeyHash = Number(Object.keys(result.balances)[0]);
-      const userTokens = result.balances[pubKeyHash];
+      const userTokens = result.balances[accounts[0].addrHash];
 
       expect(Object.keys(userTokens).length).toBe(0);
     });
@@ -426,13 +427,16 @@ describe("nft_parser", () => {
         },
       };
 
-      const pubKeys = [keypair1.pubKey, keypair2.pubKey];
+      const accounts = [
+        await queryAccountFromPubKey(keypair1.pubKey),
+        await queryAccountFromPubKey(keypair2.pubKey),
+      ];
 
       const result = await processZilNFTBalanceResponse(
         tokenOwnersResponse,
         tokenUrisResponse,
         undefined,
-        pubKeys
+        accounts
       );
 
       const balanceKeys = Object.keys(result.balances);

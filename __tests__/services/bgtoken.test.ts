@@ -34,6 +34,7 @@ import '../setupTests';
 import { messageManager } from "../setupTests";
 import { fetchNFTMeta } from 'popup/background/token';
 import { NFTStandard } from 'config/token';
+import { hashAddress } from '../../lib/utils/hashing';
 
 describe("WalletService through background messaging", () => {
   let globalState: GlobalState;
@@ -305,8 +306,10 @@ describe("WalletService through background messaging", () => {
       expect(nftMetadata.contractAddress).toBe(zrc6Contract);
       expect(nftMetadata.name).toBe("DragonZIL");
       expect(nftMetadata.symbol).toBe("DZT");
+      const state = await getGlobalState();
+      const balanceKey = hashAddress(state.wallets[0].accounts[0].addr);
       expect(JSON.stringify(nftMetadata.balances)).equal(JSON.stringify({
-        "396243429": {
+        [balanceKey]: {
           "3134": {
             "id": "3134",
             "url": "https://res.cloudinary.com/dev5gmsvw/image/upload/1_3134.png"
@@ -332,8 +335,10 @@ describe("WalletService through background messaging", () => {
 
       expect(nftMetadata).toBeDefined();
       expect(nftMetadata.standard).toBe(NFTStandard.ZRC6);
+      const state = await getGlobalState();
+      const balanceKey = hashAddress(state.wallets[0].accounts[0].addr);
       expect(JSON.stringify(nftMetadata.balances)).toEqual(JSON.stringify({
-        "396243429": {
+        [balanceKey]: {
           "1": {
             "id": "1",
             "url": "https://res.cloudinary.com/dev5gmsvw/image/upload/1_3134.png"
@@ -364,8 +369,10 @@ describe("WalletService through background messaging", () => {
       expect(nftMetadata.contractAddress).toBe(erc721Contract);
       expect(nftMetadata.name).toBe("SimpleNFT");
       expect(nftMetadata.symbol).toBe("SNFT");
+      const state = await getGlobalState();
+      const balanceKey = hashAddress(state.wallets[0].accounts[0].addr);
       expect(JSON.stringify(nftMetadata.balances)).toEqual(JSON.stringify({
-        '396243429': {}
+        [balanceKey]: {}
       }));
       expect(nftMetadata.totalSupply).toBe('');
       expect(nftMetadata.baseURI).toBeUndefined();

@@ -2,7 +2,7 @@
     import type { IAccountState, IFTokenState } from 'background/storage';
     import { _ } from 'popup/i18n';
     import { processTokenLogo } from 'lib/popup/url';
-    import { hashXORHex } from 'lib/utils/hashing';
+    import { hashAddress } from 'lib/utils/hashing';
     import globalStore from 'popup/store/global';
     import { abbreviateNumber } from 'popup/mixins/numbers';
 
@@ -25,6 +25,8 @@
 
     let searchTerm = $state('');
 
+    const balanceKey = $derived(hashAddress(account.addr));
+
     const filteredTokens = $derived(() => {
         if (!searchTerm) {
             return tokens;
@@ -41,7 +43,7 @@
         const rate = token.rate ?? 0;
         if (rate <= 0) return '-';
 
-        const rawBalance = token.balances[hashXORHex(account.pubKey)] ?? 0;
+        const rawBalance = token.balances[balanceKey] ?? 0;
         const numericBalance = Number(rawBalance) / (10 ** token.decimals);
         const convertedValue = numericBalance * rate;
         const currencySymbol = getCurrencySymbol($globalStore.wallets[$globalStore.selectedWallet]?.settings?.currencyConvert ?? 'USD');
@@ -82,7 +84,7 @@
                 </div>
                 <div class="token-balances">
                     <span class="balance">
-                        {abbreviateNumber(token.balances[hashXORHex(account.pubKey)] ?? 0, token.decimals, $globalStore.abbreviatedNumber)} {token.symbol}
+                        {abbreviateNumber(token.balances[balanceKey] ?? 0, token.decimals, $globalStore.abbreviatedNumber)} {token.symbol}
                     </span>
                     <span class="fiat-balance">
                         {getConvertedBalance(token)}

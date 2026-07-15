@@ -4,9 +4,8 @@ import { EvmMethods, ZilMethods } from 'config/jsonrpc';
 import { hexToBigInt, hexToUint8Array, uint8ArrayToHex } from 'lib/utils/hex';
 import { Address } from 'crypto/address';
 import { TypeOf } from 'lib/types';
-import { ETHEREUM, ZILLIQA } from 'config/slip44';
-import { hashXOR } from 'lib/utils/hashing';
 import { AddressType } from 'config/wallet';
+import type { QueryAccount } from './query_account';
 import { NFTStandard } from 'config/token';
 import type { NFTTokenInfo } from 'types/token';
 
@@ -53,7 +52,7 @@ type ERC721FunctionArgs = {
 
 export type NFTRequestType =
   | { type: 'Metadata'; field: NFTMetadataField; standard: NFTStandard }
-  | { type: 'Balance'; address: Address; pubKeyHash: number; standard: NFTStandard }
+  | { type: 'Balance'; address: Address; addrHash: number; standard: NFTStandard }
   | { type: 'TokenOwners'; standard: NFTStandard }
   | { type: 'TokenUris'; standard: NFTStandard }
   | { type: 'BaseUri'; standard: NFTStandard };
@@ -153,14 +152,14 @@ export class ERC721Helper {
 
 export async function buildNFTRequests(
   contract: Address,
-  pubKeys: Uint8Array[],
+  accounts: readonly QueryAccount[],
 ): Promise<{ payload: JsonRPCRequest; requestType: NFTRequestType }[]> {
   const requests: { payload: JsonRPCRequest; requestType: NFTRequestType }[] = [];
 
   if (contract.type === AddressType.Bech32) {
     await buildZilNFTRequests(contract, requests);
   } else if (contract.type === AddressType.EthCheckSum) {
-    await buildEthNFTRequests(contract, pubKeys, requests);
+    await buildEthNFTRequests(contract, accounts, requests);
   }
 
   return requests;
@@ -207,7 +206,7 @@ async function buildZilNFTRequests(
 
 async function buildEthNFTRequests(
   contract: Address,
-  pubKeys: Uint8Array[],
+  accounts: readonly QueryAccount[],
   requests: { payload: JsonRPCRequest; requestType: NFTRequestType }[],
 ): Promise<void> {
   const contractAddr = await contract.toEthChecksum();
@@ -238,17 +237,18 @@ async function buildEthNFTRequests(
     requestType: { type: 'Metadata', field: NFTMetadataField.TotalSupply, standard: NFTStandard.ERC721 },
   });
   
-  for (const pubKey of pubKeys) {
-    const addr = await Address.fromPubKey(pubKey, ETHEREUM);
+  for (const account of accounts) {
+    const addr = account.ethAddr;
+    if (!addr) continue;
     const ethAddress = await addr.toEthChecksum();
     const balanceData = erc721.encodeFunctionCall('balanceOf', [ethAddress]);
-    
+
     requests.push({
       payload: buildEthCall(balanceData),
       requestType: {
         type: 'Balance',
         address: addr,
-        pubKeyHash: hashXOR(pubKey),
+        addrHash: account.addrHash,
         standard: NFTStandard.ERC721,
       },
     });
@@ -317,7 +317,7 @@ export async function processZilNFTBalanceResponse(
   tokenOwnersResponse: JsonRPCResponse<{ token_owners?: Record<string, string> }>,
   tokenUrisResponse: JsonRPCResponse<{ token_uris?: Record<string, string> }>,
   baseURI: string | undefined,
-  pubKeys: Uint8Array[],
+  accounts: readonly QueryAccount[],
 ): Promise<{ balances: Record<number, Record<string, NFTTokenInfo>> }> {
   const tokenOwners = validateResponse(tokenOwnersResponse, [])?.token_owners || {};
   const tokenUris = validateResponse(tokenUrisResponse, [])?.token_uris || {};
@@ -329,12 +329,11 @@ export async function processZilNFTBalanceResponse(
     cleanBaseUri = baseURI.endsWith('/') ? baseURI.slice(0, -1) : baseURI;
   }
 
-  for (let i = 0; i < pubKeys.length; i++) {
-    const pubKey = pubKeys[i];
-    const addr = await Address.fromPubKey(pubKey, ZILLIQA);
+  for (const account of accounts) {
+    const addr = account.zilAddr;
+    if (!addr) continue;
     const base16Account = (await addr.toZilChecksum()).toLowerCase();
-    const pubKeyHash = hashXOR(pubKey);
-    
+
     const userTokens: Record<string, NFTTokenInfo> = {};
 
     for (const tokenId in tokenOwners) {
@@ -354,7 +353,7 @@ export async function processZilNFTBalanceResponse(
       }
     }
 
-    balances[pubKeyHash] = userTokens;
+    balances[account.addrHash] = userTokens;
   }
 
   return { balances };

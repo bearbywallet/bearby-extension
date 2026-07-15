@@ -19,7 +19,7 @@
     import { _ } from 'popup/i18n';
     import globalStore from 'popup/store/global';
     import { currentParams } from 'popup/store/route';
-    import { hashXORHex } from 'lib/utils/hashing';
+    import { hashAddress } from 'lib/utils/hashing';
     import { buildTokenTransfer } from 'popup/background/transactions';
     import { getAllAddressesByChain } from 'popup/background/wallet';
     import { push } from 'popup/router/navigation';
@@ -38,9 +38,11 @@
     const currentAccount = $derived(currentWallet?.accounts[currentWallet.selectedAccount] as IAccountState | undefined);
     const tokens = $derived<IFTokenState[]>(currentWallet?.tokens ?? []);
 
+    const balanceKey = $derived(currentAccount ? hashAddress(currentAccount.addr) : 0);
+
     const balance = $derived(() => {
         if (!selectedToken || !currentAccount) return dn.from(0, 18);
-        const rawBalance = selectedToken.balances[hashXORHex(currentAccount.pubKey)] ?? 0;
+        const rawBalance = selectedToken.balances[balanceKey] ?? 0;
         return [BigInt(rawBalance), selectedToken.decimals] as dn.Dnum;
     });
 
@@ -136,7 +138,7 @@
 
     function handleMaxAmount() {
         if (!selectedToken || !currentAccount) return;
-        const rawBalance = selectedToken.balances[hashXORHex(currentAccount.pubKey)] ?? '0';
+        const rawBalance = selectedToken.balances[balanceKey] ?? '0';
         const maxDnum: dn.Dnum = [BigInt(rawBalance), selectedToken.decimals];
         amount = dn.toString(maxDnum);
     }

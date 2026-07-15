@@ -3,7 +3,7 @@
     import { from, greaterThan, equal, multiply, type Dnum } from 'dnum';
     import FastImg from './FastImg.svelte';
     import DownIcon from './icons/Down.svelte';
-    import { hashXORHex } from 'lib/utils/hashing';
+    import { hashAddress } from 'lib/utils/hashing';
     import { processTokenLogo } from 'lib/popup/url';
     import globalStore from 'popup/store/global';
     import { abbreviateNumber } from 'popup/mixins/numbers';
@@ -29,7 +29,8 @@
 
     const logo = $derived(processTokenLogo({ token, theme: $globalStore.appearances }));
     
-    const rawBalance = $derived(token.balances[hashXORHex(account.pubKey)] ?? 0);
+    const balanceKey = $derived(hashAddress(account.addr));
+    const rawBalance = $derived(token.balances[balanceKey] ?? 0);
     const balance = $derived(() => {
         if (!token || !account) return from(0, token.decimals);
         return [BigInt(rawBalance), token.decimals] as Dnum;

@@ -35,3 +35,7 @@ export function hashXORHex(hex: string): number {
   }
   return h;
 }
+
+export function hashAddress(addr: string): number {
+  return hashString(5381, addr);
+}

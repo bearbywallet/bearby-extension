@@ -4,7 +4,7 @@
     import FastImg from './FastImg.svelte';
     import { processTokenLogo } from 'lib/popup/url';
     import { abbreviateNumber } from 'popup/mixins/numbers';
-    import { hashXORHex } from 'lib/utils/hashing';
+    import { hashAddress } from 'lib/utils/hashing';
     import { getCurrencySymbol } from 'config/currencies';
 
     let {
@@ -25,20 +25,22 @@
         onSelect?: () => void;
     } = $props();
 
+    const balanceKey = $derived(hashAddress(account.addr));
+
     const balance = $derived(() => {
         if (hide) return '******';
-        const rawBalance = token.balances[hashXORHex(account.pubKey)] ?? 0;
+        const rawBalance = token.balances[balanceKey] ?? 0;
         const humanBalance = abbreviateNumber(rawBalance, token.decimals, $globalStore.abbreviatedNumber);
         return `${humanBalance} ${getCurrencySymbol(token.symbol)}`;
     });
-    
+
     const convertedBalance = $derived(() => {
         if (hide) return '******';
-        
+
         const rate = token.rate ?? 0;
         if (rate <= 0) return '-';
 
-        const rawBalance = token.balances[hashXORHex(account.pubKey)] ?? 0;
+        const rawBalance = token.balances[balanceKey] ?? 0;
         const numericBalance = Number(rawBalance) / (10 ** token.decimals);
         const convertedValue = numericBalance * rate;
         const wallet = $globalStore.wallets[$globalStore.selectedWallet];

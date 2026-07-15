@@ -14,7 +14,7 @@ import {
 import { FToken } from "../../background/storage";
 import { KeyPair } from "../../crypto/keypair";
 import { hexToUint8Array } from "../../lib/utils/hex";
-import { hashXOR } from "../../lib/utils/hashing";
+import { queryAccountFromPubKey } from "../data";
 import { TransactionStatus } from '../../config/tx';
 import { AddressType } from "../../config/wallet";
 import type { TransactionRequestEVM } from "types/tx";
@@ -35,10 +35,12 @@ describe("JsonRPC provder tests", () => {
     const zlpContract = Address.fromStr(
       "zil1l0g8u6f9g0fsvjuu74ctyla2hltefrdyt7k5f4",
     );
-    const pubKeys = [
-      hexToUint8Array("03b0194095e799a6a5f2e81a79fde0a927906c130520f050db263f0d9acbece1ba"),
+    const accounts = [
+      await queryAccountFromPubKey(
+        hexToUint8Array("03b0194095e799a6a5f2e81a79fde0a927906c130520f050db263f0d9acbece1ba"),
+      ),
     ];
-    const result = await rpc.ftokenMeta(zlpContract, pubKeys);
+    const result = await rpc.ftokenMeta(zlpContract, accounts);
 
     expect(result.addr).toBe(await zlpContract.toZilBech32());
     expect(result.addrType).toBe(AddressType.Bech32);
@@ -46,9 +48,9 @@ describe("JsonRPC provder tests", () => {
     expect(result.symbol).toBe("ZLP");
     expect(result.name).toBe("ZilPay wallet");
 
-    pubKeys.forEach((pubkey) => {
-      expect(result.balances[hashXOR(pubkey)]).toBeDefined();
-      expect(BigInt(result.balances[hashXOR(pubkey)])).toBeGreaterThan(0);
+    accounts.forEach((account) => {
+      expect(result.balances[account.addrHash]).toBeDefined();
+      expect(BigInt(result.balances[account.addrHash])).toBeGreaterThan(0);
     });
   });
 
@@ -57,7 +59,8 @@ describe("JsonRPC provder tests", () => {
     const usdtContract = Address.fromStr(
       "0xdAC17F958D2ee523a2206206994597C13D831ec7",
     );
-    const result = await rpc.ftokenMeta(usdtContract, pubKeys);
+    const accounts = await Promise.all(pubKeys.map(queryAccountFromPubKey));
+    const result = await rpc.ftokenMeta(usdtContract, accounts);
 
     expect(result.addr).toBe(await usdtContract.toEthChecksum());
     expect(result.addrType).toBe(AddressType.EthCheckSum);
@@ -65,8 +68,8 @@ describe("JsonRPC provder tests", () => {
     expect(result.name).toBe("Tether USD");
     expect(result.symbol).toBe("USDT");
 
-    pubKeys.forEach((pubKey) => {
-      expect(result.balances[hashXOR(pubKey)]).toBeDefined();
+    accounts.forEach((account) => {
+      expect(result.balances[account.addrHash]).toBeDefined();
     });
   });
 
@@ -391,11 +394,12 @@ describe("JsonRPC provder tests", () => {
       ZLP,
     ];
 
-    await provider.updateBalances(tokens, pubKeys);
+    const accounts = await Promise.all(pubKeys.map(queryAccountFromPubKey));
+    await provider.updateBalances(tokens, accounts);
 
-    const addr0 = hashXOR(pubKeys[0]);
-    const addr1 = hashXOR( pubKeys[1]);
-    const addr2= hashXOR(pubKeys[2]);
+    const addr0 = accounts[0].addrHash;
+    const addr1 = accounts[1].addrHash;
+    const addr2 = accounts[2].addrHash;
 
     expect(BigInt(tokens[0].balances[addr0])).toBeDefined();
     expect(BigInt(tokens[0].balances[addr1])).toBeDefined();
@@ -441,10 +445,11 @@ describe("JsonRPC provder tests", () => {
       }),
     ];
 
-    await provider.updateBalances(tokens, pubKeys);
+    const accounts = await Promise.all(pubKeys.map(queryAccountFromPubKey));
+    await provider.updateBalances(tokens, accounts);
 
-    const hash0 = hashXOR(pubKeys[0]);
-    const hash1 = hashXOR(pubKeys[1]);
+    const hash0 = accounts[0].addrHash;
+    const hash1 = accounts[1].addrHash;
 
     expect(BigInt(tokens[0].balances[hash0])).toBeDefined();
     expect(BigInt(tokens[0].balances[hash1])).toBeDefined();
