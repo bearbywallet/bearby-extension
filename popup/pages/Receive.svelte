@@ -1,6 +1,5 @@
 <script lang="ts">
     import { _ } from 'popup/i18n';
-    import { generate } from 'lean-qr';
     import { get } from 'svelte/store';
     import globalStore from 'popup/store/global';
     import { setGlobalState } from 'popup/background/wallet';
@@ -19,8 +18,8 @@
     import Modal from '../components/Modal.svelte';
     import TokenSelector from '../modals/TokenSelectorModal.svelte';
     import CopyButton from '../components/CopyButton.svelte';
+    import QrCode from '../components/QrCode.svelte';
 
-    let canvasElement: HTMLCanvasElement;
     let accountName = $state('');
     let selectedToken = $state<IFTokenState | undefined>(undefined);
     let showTokenModal = $state(false);
@@ -49,17 +48,6 @@
         chain: currentChain?.chain.toLowerCase() ?? '',
         token: selectedToken?.addr,
     }));
-
-    $effect(() => {
-        if (canvasElement && qrData) {
-            const code = generate(qrData);
-            code.toCanvas(canvasElement, {
-                on: [255, 0, 122, 255],
-                off: [0, 0, 0, 0],
-                pad: 0
-            });
-        }
-    });
 
     function handleTokenSelect(token: IFTokenState) {
         selectedToken = token;
@@ -111,9 +99,7 @@
                 {/if}
                 <DownIcon />
             </button>
-            <div class="canvas-container">
-                <canvas bind:this={canvasElement}></canvas>
-            </div>
+            <QrCode data={qrData} />
             <div class="addresses-container" class:multi={isMultiAddress}>
                 {#each addresses as addr}
                     <CopyButton value={addr} label={truncate(addr, 10, 10)} />
@@ -223,16 +209,6 @@
         height: 24px;
         border-radius: 50%;
         overflow: hidden;
-    }
-
-    .canvas-container {
-        width: 166px;
-        height: 166px;
-        canvas {
-            width: 100%;
-            height: 100%;
-            image-rendering: pixelated;
-        }
     }
 
     .addresses-container {

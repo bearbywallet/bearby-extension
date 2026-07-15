@@ -5,6 +5,8 @@
     import globalStore from 'popup/store/global';
     import { exportKeyPair, exportbip39Words, unlockWallet } from 'popup/background/wallet';
     import { WalletTypes } from 'config/wallet';
+    import { generateQRSecretData } from '../mixins/qrcode';
+    import { getAccountChain } from 'popup/mixins/chains';
 
     import SmartInput from '../components/SmartInput.svelte';
     import Button from '../components/Button.svelte';
@@ -13,6 +15,7 @@
     import HexKey from '../components/HexKey.svelte';
     import CopyButton from '../components/CopyButton.svelte';
     import AccountCard from '../components/AccountCard.svelte';
+    import QrCode from '../components/QrCode.svelte';
 
     const REVEAL_STAGE = {
         PASSWORD: 0,
@@ -45,6 +48,25 @@
             ? $_('reveal.phraseWarning')
             : $_('reveal.keyWarning')
     );
+
+    const chain = $derived(getAccountChain($globalStore.selectedWallet));
+
+    const revealQrData = $derived.by(() => {
+        if (!chain) return null;
+        if (isPhrase && revealedData.length > 0) {
+            return generateQRSecretData({
+                chain: chain.shortName,
+                seedPhrase: revealedData.join(' '),
+            });
+        }
+        if (!isPhrase && keyPair) {
+            return generateQRSecretData({
+                chain: chain.shortName,
+                privateKey: keyPair.privateKey,
+            });
+        }
+        return null;
+    });
 
     async function handleSubmit(e: SubmitEvent) {
         e.preventDefault();
@@ -239,6 +261,11 @@
                             {/each}
                         </div>
                     </div>
+                    {#if revealQrData}
+                        <div class="qr-wrapper">
+                            <QrCode data={revealQrData} size={160} />
+                        </div>
+                    {/if}
                 </div>
             {:else}
                 <div class="accounts-section">
@@ -261,6 +288,11 @@
                     <div class="key-loading">{$_('reveal.loadingKey')}</div>
                 {:else if keyPair}
                     <div class="key-container">
+                        {#if revealQrData}
+                            <div class="qr-wrapper">
+                                <QrCode data={revealQrData} size={140} />
+                            </div>
+                        {/if}
                         <div class="key-section">
                             <div class="key-header">
                                 <span class="key-label">{$_('reveal.privateKey')}</span>
@@ -540,5 +572,11 @@
 
     .key-error {
         color: var(--color-content-text-pink);
+    }
+
+    .qr-wrapper {
+        display: flex;
+        justify-content: center;
+        padding: 8px 0;
     }
 </style>
