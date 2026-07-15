@@ -3,9 +3,9 @@
     import { _ } from 'popup/i18n';
     import { currentParams } from 'popup/store/route';
     import globalStore from 'popup/store/global';
-    import { exportKeyPair, exportbip39Words } from 'popup/background/wallet';
+    import { exportKeyPair, exportbip39Words, unlockWallet } from 'popup/background/wallet';
     import { WalletTypes } from 'config/wallet';
-    
+
     import SmartInput from '../components/SmartInput.svelte';
     import Button from '../components/Button.svelte';
     import WarningIcon from '../components/icons/Warning.svelte';
@@ -22,7 +22,7 @@
 
     const mode = $derived(($currentParams.mode as string) || 'phrase');
     const isPhrase = $derived(mode === 'phrase');
-    
+
     let password = $state('');
     let stage: number = $state(REVEAL_STAGE.PASSWORD);
     let countdown = $state(3600);
@@ -32,10 +32,15 @@
     let keyPair = $state<IKeyPair | null>(null);
     let intervalId: number | null = null;
 
+    // Per-account reveal state
+    let selectedAccountIndex = $state(0);
+    let keyPairCache = $state<Record<number, IKeyPair>>({});
+    let isKeyLoading = $state(false);
+
     const wallet = $derived($globalStore.wallets[$globalStore.selectedWallet]);
     const currentAccount = $derived(wallet?.accounts[wallet.selectedAccount]);
     const warningText = $derived(
-        isPhrase 
+        isPhrase
             ? $_('reveal.phraseWarning')
             : $_('reveal.keyWarning')
     );
@@ -52,7 +57,8 @@
                 const mnemonic = await exportbip39Words(password, $globalStore.selectedWallet);
                 revealedData = mnemonic.split(" ");
             } else if (!isPhrase) {
-                keyPair = await exportKeyPair(password, $globalStore.selectedWallet, wallet.selectedAccount);
+                // Validate password only — key material is fetched after the countdown.
+                await unlockWallet(password, $globalStore.selectedWallet);
             }
 
             stage = REVEAL_STAGE.COUNTDOWN;
@@ -72,8 +78,46 @@
                     clearInterval(intervalId);
                 }
                 stage = REVEAL_STAGE.REVEALED;
+                if (!isPhrase) {
+                    selectAccount(wallet.selectedAccount);
+                }
             }
         }, 1000);
+    }
+
+    async function selectAccount(index: number) {
+        selectedAccountIndex = index;
+
+        const cached = keyPairCache[index];
+        if (cached) {
+            error = null;
+            isKeyLoading = false; // in-flight fetch for another account may have left this true
+            keyPair = cached;
+            return;
+        }
+
+        isKeyLoading = true;
+        error = null;
+        keyPair = null;
+
+        try {
+            const pair = await exportKeyPair(password, $globalStore.selectedWallet, index);
+            keyPairCache = { ...keyPairCache, [index]: pair };
+
+            // Only apply if the user hasn't clicked another account meanwhile.
+            if (selectedAccountIndex === index) {
+                keyPair = pair;
+            }
+        } catch (err) {
+            console.error(err);
+            if (selectedAccountIndex === index) {
+                error = $_('reveal.keyError');
+            }
+        } finally {
+            if (selectedAccountIndex === index) {
+                isKeyLoading = false;
+            }
+        }
     }
 
     function formatTime(seconds: number): string {
@@ -87,6 +131,11 @@
             if (intervalId !== null) {
                 clearInterval(intervalId);
             }
+            // Wipe secrets from component state on unmount.
+            password = '';
+            keyPair = null;
+            keyPairCache = {};
+            revealedData = [];
         };
     });
 </script>
@@ -162,16 +211,16 @@
                 </div>
             </div>
         {:else if stage === REVEAL_STAGE.REVEALED}
-            {#if currentAccount}
-                <AccountCard
-                    name={currentAccount.name}
-                    address={currentAccount.addr}
-                    selected={false}
-                    onclick={() => {}}
-                />
-            {/if}
-
             {#if isPhrase}
+                {#if currentAccount}
+                    <AccountCard
+                        name={currentAccount.name}
+                        address={currentAccount.addr}
+                        selected={false}
+                        onclick={() => {}}
+                    />
+                {/if}
+
                 <div class="phrase-section">
                     <div class="phrase-header">
                         <span class="phrase-label">{$_('reveal.secretPhrase')}</span>
@@ -185,24 +234,44 @@
                         </div>
                     </div>
                 </div>
-            {:else if keyPair}
-                <div class="key-container">
-                    <div class="key-section">
-                        <div class="key-header">
-                            <span class="key-label">{$_('reveal.privateKey')}</span>
-                            <CopyButton label={$_('reveal.copy')} value={keyPair.privateKey} />
-                        </div>
-                        <HexKey hexKey={keyPair.privateKey} title="" />
-                    </div>
-
-                    <div class="key-section">
-                        <div class="key-header">
-                            <span class="key-label">{$_('reveal.publicKey')}</span>
-                            <CopyButton label={$_('reveal.copy')} value={keyPair.publicKey} />
-                        </div>
-                        <div class="public-key-value">{keyPair.publicKey}</div>
+            {:else}
+                <div class="accounts-section">
+                    <span class="accounts-label">{$_('reveal.accounts')}</span>
+                    <div class="accounts-list">
+                        {#each wallet.accounts as account, i (account.addr)}
+                            <AccountCard
+                                name={account.name}
+                                address={account.addr}
+                                selected={i === selectedAccountIndex}
+                                onclick={() => selectAccount(i)}
+                            />
+                        {/each}
                     </div>
                 </div>
+
+                {#if error}
+                    <div class="key-error">{error}</div>
+                {:else if isKeyLoading}
+                    <div class="key-loading">{$_('reveal.loadingKey')}</div>
+                {:else if keyPair}
+                    <div class="key-container">
+                        <div class="key-section">
+                            <div class="key-header">
+                                <span class="key-label">{$_('reveal.privateKey')}</span>
+                                <CopyButton label={$_('reveal.copy')} value={keyPair.privateKey} />
+                            </div>
+                            <HexKey hexKey={keyPair.privateKey} title="" />
+                        </div>
+
+                        <div class="key-section">
+                            <div class="key-header">
+                                <span class="key-label">{$_('reveal.publicKey')}</span>
+                                <CopyButton label={$_('reveal.copy')} value={keyPair.publicKey} />
+                            </div>
+                            <div class="public-key-value">{keyPair.publicKey}</div>
+                        </div>
+                    </div>
+                {/if}
             {/if}
         {/if}
     </main>
@@ -431,5 +500,39 @@
         padding: 12px;
         background: var(--color-neutral-background-container);
         border-radius: 8px;
+    }
+
+    .accounts-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .accounts-label {
+        color: var(--color-content-text-inverted);
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 20px;
+        padding: 0 4px;
+    }
+
+    .accounts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 240px;
+        overflow-y: auto;
+    }
+
+    .key-loading,
+    .key-error {
+        text-align: center;
+        font-size: 14px;
+        padding: 24px 0;
+        color: var(--color-content-text-secondary);
+    }
+
+    .key-error {
+        color: var(--color-content-text-pink);
     }
 </style>

@@ -573,6 +573,9 @@
     "secretPhrase": "秘密恢复短语",
     "privateKey": "私钥",
     "publicKey": "公钥",
-    "copy": "复制"
+    "copy": "复制",
+    "accounts": "账户",
+    "loadingKey": "正在导出密钥…",
+    "keyError": "导出密钥失败。请重试。"
   }
 }

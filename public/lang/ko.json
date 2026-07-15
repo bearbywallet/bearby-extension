@@ -559,7 +559,10 @@
     "secretPhrase": "비밀 복구 문구",
     "privateKey": "개인 키",
     "publicKey": "공개 키",
-    "copy": "복사"
+    "copy": "복사",
+    "accounts": "계정",
+    "loadingKey": "키 도출 중…",
+    "keyError": "키 도출에 실패했습니다. 다시 시도하세요."
   },
   "settings": {
     "notifications": "알림",

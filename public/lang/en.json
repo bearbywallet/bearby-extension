@@ -559,7 +559,10 @@
     "secretPhrase": "Secret Recovery Phrase",
     "privateKey": "Private Key",
     "publicKey": "Public Key",
-    "copy": "Copy"
+    "copy": "Copy",
+    "accounts": "Accounts",
+    "loadingKey": "Deriving key…",
+    "keyError": "Failed to derive key. Try again."
   },
   "settings": {
     "notifications": "Notifications",

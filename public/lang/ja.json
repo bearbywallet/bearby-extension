@@ -559,7 +559,10 @@
     "secretPhrase": "シークレット復元フレーズ",
     "privateKey": "秘密鍵",
     "publicKey": "公開鍵",
-    "copy": "コピー"
+    "copy": "コピー",
+    "accounts": "アカウント",
+    "loadingKey": "キーを導出中…",
+    "keyError": "キーの導出に失敗しました。もう一度お試しください。"
   },
   "settings": {
     "notifications": "通知",
