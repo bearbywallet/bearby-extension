@@ -25,7 +25,8 @@
 
     let password = $state('');
     let stage: number = $state(REVEAL_STAGE.PASSWORD);
-    let countdown = $state(3600);
+    const COUNTDOWN_SECONDS = 3600;
+    let countdown = $state(COUNTDOWN_SECONDS);
     let error = $state<string | null>(null);
     let isLoading = $state(false);
     let revealedData = $state<string[]>([]);
@@ -53,11 +54,16 @@
         error = null;
 
         try {
-            if (isPhrase && wallet.walletType === WalletTypes.SecretPhrase) {
+            if (isPhrase) {
+                // Seed phrase only exists for mnemonic wallets — not SecretKey imports.
+                if (wallet.walletType !== WalletTypes.SecretPhrase) {
+                    throw new Error('Invalid wallet type for phrase reveal');
+                }
                 const mnemonic = await exportbip39Words(password, $globalStore.selectedWallet);
                 revealedData = mnemonic.split(" ");
-            } else if (!isPhrase) {
+            } else {
                 // Validate password only — key material is fetched after the countdown.
+                // Works for both SecretPhrase (derived) and SecretKey (stored) wallets.
                 await unlockWallet(password, $globalStore.selectedWallet);
             }
 
@@ -199,7 +205,7 @@
                             cx="100"
                             cy="100"
                             r="90"
-                            style="stroke-dashoffset: {565 * (countdown / 3600)}"
+                            style="stroke-dashoffset: {565 * (countdown / COUNTDOWN_SECONDS)}"
                         />
                     </svg>
                     <div class="countdown-time">{formatTime(countdown)}</div>

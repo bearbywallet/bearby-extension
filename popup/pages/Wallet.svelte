@@ -82,15 +82,18 @@
     <DestroyWallet onClose={() => showDeleteModal = false} />
 </Modal>
 
-<Modal 
-    bind:show={showBackupModal} 
-    title={$_('walletSettings.backup')}
->
-    <RevealModal 
-        onRevealPhrase={handleRevealPhrase}
-        onExportKeys={handleExportKeys}
-    />
-</Modal>
+{#if wallet}
+    <Modal
+        bind:show={showBackupModal}
+        title={$_('walletSettings.backup')}
+    >
+        <RevealModal
+            walletType={wallet.walletType}
+            onRevealPhrase={handleRevealPhrase}
+            onExportKeys={handleExportKeys}
+        />
+    </Modal>
+{/if}
 
 <div class="page-container">
     <NavBar title={$_('walletSettings.title')} />

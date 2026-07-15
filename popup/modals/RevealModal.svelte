@@ -1,36 +1,48 @@
 <script lang="ts">
     import { _ } from 'popup/i18n';
+    import { WalletTypes } from 'config/wallet';
     import Button from '../components/Button.svelte';
 
     let {
+        walletType,
         onRevealPhrase = () => {},
         onExportKeys = () => {}
     }: {
+        walletType: WalletTypes;
         onRevealPhrase?: () => void;
         onExportKeys?: () => void;
     } = $props();
+
+    const showRevealPhrase = $derived(walletType === WalletTypes.SecretPhrase);
+    const showExportKeys = $derived(
+        walletType === WalletTypes.SecretPhrase || walletType === WalletTypes.SecretKey
+    );
 </script>
 
 <div class="backup-modal-content">
-    <div class="section">
-        <div class="section-text">
-            <h3 class="section-title">{$_('backup.revealTitle')}</h3>
-            <p class="section-description">{$_('backup.revealDescription')}</p>
+    {#if showRevealPhrase}
+        <div class="section">
+            <div class="section-text">
+                <h3 class="section-title">{$_('backup.revealTitle')}</h3>
+                <p class="section-description">{$_('backup.revealDescription')}</p>
+            </div>
+            <Button variant="outline" onclick={onRevealPhrase}>
+                {$_('backup.reveal')}
+            </Button>
         </div>
-        <Button variant="outline" onclick={onRevealPhrase}>
-            {$_('backup.reveal')}
-        </Button>
-    </div>
+    {/if}
 
-    <div class="section">
-        <div class="section-text">
-            <h3 class="section-title">{$_('backup.privateKeysTitle')}</h3>
-            <p class="section-description">{$_('backup.privateKeysWarning')}</p>
+    {#if showExportKeys}
+        <div class="section">
+            <div class="section-text">
+                <h3 class="section-title">{$_('backup.privateKeysTitle')}</h3>
+                <p class="section-description">{$_('backup.privateKeysWarning')}</p>
+            </div>
+            <Button variant="outline" onclick={onExportKeys}>
+                {$_('backup.export')}
+            </Button>
         </div>
-        <Button variant="outline" onclick={onExportKeys}>
-            {$_('backup.export')}
-        </Button>
-    </div>
+    {/if}
 </div>
 
 <style lang="scss">
