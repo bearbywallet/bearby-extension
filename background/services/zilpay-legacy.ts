@@ -1,5 +1,6 @@
 import { Signature } from "@noble/secp256k1";
 import { NetworkProvider, type JsonRPCRequest } from "background/rpc";
+import { HistoricalTransaction } from "background/rpc/history_tx";
 import type { BackgroundState } from "background/storage";
 import { ConfirmState } from "background/storage/confirm";
 import { ConnectError } from "config/errors";
@@ -172,6 +173,8 @@ export class ZilPayLegacyService {
         throw new Error(`not found ${uuid}`);
       }
 
+      const req = scillaMessage.signMessageScilla;
+
       if (!approve) {
         new TabsMessage({
           type: LegacyZilliqaTabMsg.SING_MESSAGE_RES,
@@ -179,13 +182,19 @@ export class ZilPayLegacyService {
           payload: {
            reject: ConnectError.UserRejected, 
           },
-        }).send(scillaMessage.signMessageScilla.domain);
+        }).send(req.domain);
       } else {
+        const defaultChainConfig = this.#state.getChain(wallet.defaultChainHash);
+
+        if (!defaultChainConfig) {
+          throw new Error(ConnectError.ChainNotFound);
+        }
+
         let signature: string;
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
           const sigBytes = hexToUint8Array(sig);
-          const hash = hexToUint8Array(scillaMessage.signMessageScilla.hash);
+          const hash = hexToUint8Array(req.hash);
           const pubKeyBytes = hexToUint8Array(account.pubKey);
           const isvalid = await verify(hash, pubKeyBytes, Signature.fromBytes(sigBytes))
           if (!isvalid) {
@@ -193,8 +202,6 @@ export class ZilPayLegacyService {
           }
           signature = sig;
         } else {
-          const defaultChainConfig = this.#state.getChain(wallet.defaultChainHash)!;
-
           const allSlip44s = new Set(this.#state.chains.map((c) => c.slip44));
           const keyPair = await wallet.resolveKeypair(
             account.index,
@@ -203,11 +210,30 @@ export class ZilPayLegacyService {
             "schnorr",
           );
 
-          const hashBytes = hexToUint8Array(scillaMessage.signMessageScilla.hash);
-          const sig = await keyPair.signMessage(hashBytes);
+          const hashBytes = hexToUint8Array(req.hash);
+          const signed = await keyPair.signMessage(hashBytes);
 
-          signature = uint8ArrayToHex(sig);
+          signature = uint8ArrayToHex(signed);
         }
+
+        const chainConfig =
+          this.#state.getChain(account.chainHash) ?? defaultChainConfig;
+
+        wallet.history.push(
+          HistoricalTransaction.fromSignedMessage(
+            HistoricalTransaction.createSignedMessageMetadata(
+              account.chainHash,
+              req,
+              chainConfig.ftokens[0],
+            ),
+            {
+              kind: 'scilla',
+              address: account.addr,
+              signature,
+              message: req.content,
+            },
+          ),
+        );
 
         new TabsMessage({
           type: LegacyZilliqaTabMsg.SING_MESSAGE_RES,
@@ -215,11 +241,11 @@ export class ZilPayLegacyService {
           payload: {
            resolve: {
              signature: signature,
-              message: scillaMessage.signMessageScilla.content,
+              message: req.content,
               publicKey: account.pubKey,
            }, 
           },
-        }).send(scillaMessage.signMessageScilla.domain);
+        }).send(req.domain);
       }
 
       wallet.confirm = wallet.confirm.filter(c => c.uuid !== uuid);

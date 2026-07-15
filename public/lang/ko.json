@@ -299,7 +299,8 @@
     "thisWeek": "이번 주",
     "thisMonth": "이번 달",
     "clearAll": "모두 지우기",
-    "noTransactions": "트랜잭션 내역 없음"
+    "noTransactions": "트랜잭션 내역 없음",
+    "signedMessage": "서명된 메시지"
   },
   "txDetails": {
     "title": "트랜잭션 상세",
@@ -316,7 +317,19 @@
     "hash": "트랜잭션 해시",
     "gasUsed": "사용된 가스",
     "gasPrice": "가스 가격",
-    "block": "블록 번호"
+    "block": "블록 번호",
+    "message": "메시지",
+    "messageHash": "메시지 해시",
+    "signature": "서명",
+    "signer": "서명자",
+    "dapp": "DApp",
+    "kind": "유형",
+    "signKind": {
+      "eth_sign": "eth_sign",
+      "personal_sign": "personal_sign",
+      "eip712": "EIP-712",
+      "scilla": "Scilla"
+    }
   },
   "walletSettings": {
     "title": "지갑 설정",

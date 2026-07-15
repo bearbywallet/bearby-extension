@@ -299,7 +299,8 @@
     "thisWeek": "На Этой Неделе",
     "thisMonth": "В Этом Месяце",
     "clearAll": "Очистить Всё",
-    "noTransactions": "История транзакций пуста"
+    "noTransactions": "История транзакций пуста",
+    "signedMessage": "Подписанное сообщение"
   },
   "txDetails": {
     "title": "Детали Транзакции",
@@ -316,7 +317,19 @@
     "hash": "Хеш Транзакции",
     "gasUsed": "Использовано Gas",
     "gasPrice": "Цена Gas",
-    "block": "Номер Блока"
+    "block": "Номер Блока",
+    "message": "Сообщение",
+    "messageHash": "Хеш сообщения",
+    "signature": "Подпись",
+    "signer": "Подписант",
+    "dapp": "DApp",
+    "kind": "Тип",
+    "signKind": {
+      "eth_sign": "eth_sign",
+      "personal_sign": "personal_sign",
+      "eip712": "EIP-712",
+      "scilla": "Scilla"
+    }
   },
   "settings": {
     "notifications": "Уведомления",

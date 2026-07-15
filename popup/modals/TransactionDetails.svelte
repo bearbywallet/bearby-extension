@@ -8,19 +8,31 @@
     import { _ } from 'popup/i18n';
     import { hashChainConfig } from 'lib/utils/hashing';
     import { openTxInExplorer } from 'popup/mixins/links';
+    import type { SignedMessageKind } from 'types/tx';
     
     import FastImg from '../components/FastImg.svelte';
     import CopyButton from '../components/CopyButton.svelte';
+    import EIP712View from '../components/EIP712View.svelte';
     import SuccessIcon from '../components/icons/Success.svelte';
     import HistoryIcon from '../components/icons/History.svelte';
     import WarningIcon from '../components/icons/Warning.svelte';
     import { truncate } from 'popup/mixins/address';
+
+    const SIGN_KIND_I18N: Readonly<Record<SignedMessageKind, string>> = Object.freeze({
+        eth_sign: 'txDetails.signKind.eth_sign',
+        personal_sign: 'txDetails.signKind.personal_sign',
+        eip712: 'txDetails.signKind.eip712',
+        scilla: 'txDetails.signKind.scilla',
+    });
 
     let {
         transaction
     }: {
         transaction: IHistoricalTransactionState;
     } = $props();
+
+    const signedMessage = $derived(transaction.signedMessage);
+    const isSignedMessage = $derived(Boolean(signedMessage));
 
     const chain = $derived(
         $globalStore.chains.find(
@@ -94,7 +106,17 @@
     });
 
     const sender = $derived(() => {
+        if (signedMessage) {
+            return signedMessage.address;
+        }
         return transaction.evm?.from ?? transaction.scilla?.senderAddr ?? '';
+    });
+
+    const kindLabel = $derived(() => {
+        if (!signedMessage) {
+            return '';
+        }
+        return $_(SIGN_KIND_I18N[signedMessage.kind]);
     });
 
     const gasUsed = $derived(() => {
@@ -187,12 +209,16 @@
 
     <div class="amount-section">
         <div class="amount-value">
-            -{amount()} {transaction.metadata.token.symbol}
+            {#if isSignedMessage}
+                {$_('history.signedMessage')}
+            {:else}
+                -{amount()} {transaction.metadata.token.symbol}
+            {/if}
         </div>
         <div class="amount-date">{formattedDate}</div>
     </div>
 
-    {#if chain && chain.explorers && txHash()}
+    {#if !isSignedMessage && chain && chain.explorers && txHash()}
         <div class="explorers-container">
             {#each chain.explorers as explorer}
                 <button
@@ -209,47 +235,90 @@
     {/if}
 
     <div class="details-section">
-        <div class="detail-row">
-            <span class="detail-label">{$_('txDetails.from')}</span>
-            <CopyButton label={truncate(sender())} value={sender()} />
-        </div>
-
-        <div class="detail-row">
-            <span class="detail-label">{$_('txDetails.to')}</span>
-            <CopyButton label={truncate(recipient())} value={recipient()} />
-        </div>
-
-        {#if txHash()}
+        {#if signedMessage}
             <div class="detail-row">
-                <span class="detail-label">{$_('txDetails.hash')}</span>
-                <CopyButton label={truncate(txHash())} value={txHash()} />
+                <span class="detail-label">{$_('txDetails.signer')}</span>
+                <CopyButton label={truncate(sender())} value={sender()} />
             </div>
-        {/if}
 
-        <div class="detail-divider"></div>
+            {#if transaction.metadata.domain}
+                <div class="detail-row">
+                    <span class="detail-label">{$_('txDetails.dapp')}</span>
+                    <span class="detail-value">{transaction.metadata.domain}</span>
+                </div>
+            {/if}
 
-        <div class="detail-row">
-            <span class="detail-label">{$_('txDetails.gasUsed')}</span>
-            <span class="detail-value">{gasUsed()}</span>
-        </div>
-
-        <div class="detail-row">
-            <span class="detail-label">{$_('txDetails.gasPrice')}</span>
-            <span class="detail-value">{gasPrice()} Gwei</span>
-        </div>
-
-        {#if transactionFee() !== '-'}
             <div class="detail-row">
-                <span class="detail-label">{$_('txDetails.transactionFee')}</span>
-                <span class="detail-value">{transactionFee()} {nativeSymbol}</span>
+                <span class="detail-label">{$_('txDetails.kind')}</span>
+                <span class="detail-value">{kindLabel()}</span>
             </div>
-        {/if}
 
-        {#if blockNumber() !== '-'}
-            <div class="detail-row">
-                <span class="detail-label">{$_('txDetails.block')}</span>
-                <span class="detail-value">{blockNumber()}</span>
+            <div class="detail-divider"></div>
+
+            <div class="message-block">
+                <span class="detail-label">
+                    {signedMessage.kind === 'eth_sign'
+                        ? $_('txDetails.messageHash')
+                        : $_('txDetails.message')}
+                </span>
+                {#if signedMessage.kind === 'eip712' && signedMessage.typedDataJson}
+                    <div class="typed-data-wrap">
+                        <EIP712View typedDataJson={signedMessage.typedDataJson} />
+                    </div>
+                {:else}
+                    <pre class="message-body">{signedMessage.message ?? ''}</pre>
+                {/if}
             </div>
+
+            <div class="detail-divider"></div>
+
+            <div class="detail-row">
+                <span class="detail-label">{$_('txDetails.signature')}</span>
+                <CopyButton label={truncate(signedMessage.signature)} value={signedMessage.signature} />
+            </div>
+        {:else}
+            <div class="detail-row">
+                <span class="detail-label">{$_('txDetails.from')}</span>
+                <CopyButton label={truncate(sender())} value={sender()} />
+            </div>
+
+            <div class="detail-row">
+                <span class="detail-label">{$_('txDetails.to')}</span>
+                <CopyButton label={truncate(recipient())} value={recipient()} />
+            </div>
+
+            {#if txHash()}
+                <div class="detail-row">
+                    <span class="detail-label">{$_('txDetails.hash')}</span>
+                    <CopyButton label={truncate(txHash())} value={txHash()} />
+                </div>
+            {/if}
+
+            <div class="detail-divider"></div>
+
+            <div class="detail-row">
+                <span class="detail-label">{$_('txDetails.gasUsed')}</span>
+                <span class="detail-value">{gasUsed()}</span>
+            </div>
+
+            <div class="detail-row">
+                <span class="detail-label">{$_('txDetails.gasPrice')}</span>
+                <span class="detail-value">{gasPrice()} Gwei</span>
+            </div>
+
+            {#if transactionFee() !== '-'}
+                <div class="detail-row">
+                    <span class="detail-label">{$_('txDetails.transactionFee')}</span>
+                    <span class="detail-value">{transactionFee()} {nativeSymbol}</span>
+                </div>
+            {/if}
+
+            {#if blockNumber() !== '-'}
+                <div class="detail-row">
+                    <span class="detail-label">{$_('txDetails.block')}</span>
+                    <span class="detail-value">{blockNumber()}</span>
+                </div>
+            {/if}
         {/if}
     </div>
 </div>
@@ -426,5 +495,30 @@
         height: 1px;
         background: var(--color-cards-regular-border-default);
         margin: 4px 0;
+    }
+
+    .message-block {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .message-body {
+        margin: 0;
+        padding: 12px;
+        max-height: 200px;
+        overflow: auto;
+        border-radius: 12px;
+        background: var(--color-neutral-background-container);
+        color: var(--color-content-text-inverted);
+        font-size: 12px;
+        line-height: 16px;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .typed-data-wrap {
+        max-height: 280px;
+        overflow: auto;
     }
 </style>

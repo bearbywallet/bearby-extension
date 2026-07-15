@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { formatDate } from 'popup/i18n';
+    import { formatDate, _ } from 'popup/i18n';
     import { abbreviateNumber } from 'popup/mixins/numbers';
     import { processTokenLogo } from 'lib/popup/url';
     import globalStore from 'popup/store/global';
@@ -12,6 +12,8 @@
     }: {
         transaction: IHistoricalTransactionState;
     } = $props();
+
+    const isSignedMessage = $derived(Boolean(transaction.signedMessage));
 
     const amount = $derived(() => {
         const value = transaction.metadata.token.value ?? 
@@ -31,6 +33,9 @@
     );
 
     const subtitle = $derived(() => {
+        if (transaction.signedMessage) {
+            return transaction.metadata.domain ?? '';
+        }
         if (transaction.metadata.token.recipient) {
             return transaction.metadata.token.recipient;
         }
@@ -62,7 +67,11 @@
 
     <div class="amount-section">
         <div class="amount">
-            -{amount()} {transaction.metadata.token.symbol}
+            {#if isSignedMessage}
+                {$_('history.signedMessage')}
+            {:else}
+                -{amount()} {transaction.metadata.token.symbol}
+            {/if}
         </div>
         <div class="date">{formattedDate}</div>
     </div>

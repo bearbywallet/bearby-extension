@@ -5,6 +5,7 @@ import type { StreamResponse } from "lib/streem";
 import type { ConnectService } from "./connect";
 import type { ConnectParams } from "types/connect";
 import { NetworkProvider, type JsonRPCRequest } from "background/rpc";
+import { HistoricalTransaction } from "background/rpc/history_tx";
 import {
   bigintToHex,
   HEX_PREFIX,
@@ -19,7 +20,10 @@ import { ETHEREUM, ZILLIQA } from "config/slip44";
 import { ConfirmState } from "background/storage/confirm";
 import { PromptService } from "lib/popup/prompt";
 import { AddressType, WalletTypes } from "config/wallet";
-import type { TransactionRequestEVM, TransactionMetadata } from "types/tx";
+import type {
+  TransactionRequestEVM,
+  TransactionMetadata,
+} from "types/tx";
 import {
   ChainConfig,
   FToken,
@@ -358,11 +362,12 @@ export class EvmService {
         throw new Error(`${ConnectError.RequestNotFound}: ${uuid}`);
       }
 
+      const req = evmMessage.signMessageEVM;
 
       if (!approve) {
         this.#sendError(
           uuid,
-          evmMessage.signMessageEVM.domain,
+          req.domain,
           ConnectError.UserRejected,
           4001,
         );
@@ -378,7 +383,7 @@ export class EvmService {
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
           const messageBytes = messageToUint8Array(
-            evmMessage.signMessageEVM.messageHash,
+            req.messageHash,
           );
           let verify = eip191Signer.verify(sig, messageBytes, account.addr);
           if (!verify) {
@@ -396,13 +401,31 @@ export class EvmService {
 
 
           const hashBuffer = messageToUint8Array(
-            evmMessage.signMessageEVM.messageHash,
+            req.messageHash,
           );
           const s = await keyPair.signMessage(hashBuffer);
           signature = uint8ArrayToHex(s, true);
         }
 
-        this.#sendSuccess(uuid, evmMessage.signMessageEVM.domain, signature);
+        const chainConfig =
+          this.#state.getChain(account.chainHash) ?? defaultChain;
+        wallet.history.push(
+          HistoricalTransaction.fromSignedMessage(
+            HistoricalTransaction.createSignedMessageMetadata(
+              account.chainHash,
+              req,
+              chainConfig.ftokens[0],
+            ),
+            {
+              kind: 'eth_sign',
+              address: req.address,
+              signature,
+              message: req.messageHash,
+            },
+          ),
+        );
+
+        this.#sendSuccess(uuid, req.domain, signature);
       }
 
       wallet.confirm = wallet.confirm.filter((c) => c.uuid !== uuid);
@@ -438,11 +461,12 @@ export class EvmService {
         throw new Error(`${ConnectError.RequestNotFound}: ${uuid}`);
       }
 
+      const req = evmMessage.signPersonalMessageEVM;
 
       if (!approve) {
         this.#sendError(
           uuid,
-          evmMessage.signPersonalMessageEVM.domain,
+          req.domain,
           ConnectError.UserRejected,
           4001,
         );
@@ -457,7 +481,7 @@ export class EvmService {
         let signature: string;
 
         const messageBytes = messageToUint8Array(
-          evmMessage.signPersonalMessageEVM.message,
+          req.message,
         );
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
@@ -480,9 +504,27 @@ export class EvmService {
           signature = uint8ArrayToHex(s, true);
         }
 
+        const chainConfig =
+          this.#state.getChain(account.chainHash) ?? defaultChain;
+        wallet.history.push(
+          HistoricalTransaction.fromSignedMessage(
+            HistoricalTransaction.createSignedMessageMetadata(
+              account.chainHash,
+              req,
+              chainConfig.ftokens[0],
+            ),
+            {
+              kind: 'personal_sign',
+              address: req.address,
+              signature,
+              message: req.message,
+            },
+          ),
+        );
+
         this.#sendSuccess(
           uuid,
-          evmMessage.signPersonalMessageEVM.domain,
+          req.domain,
           signature,
         );
       }
@@ -520,11 +562,12 @@ export class EvmService {
         throw new Error(`${ConnectError.RequestNotFound}: ${uuid}`);
       }
 
+      const req = evmTypedData.signTypedDataJsonEVM;
 
       if (!approve) {
         this.#sendError(
           uuid,
-          evmTypedData.signTypedDataJsonEVM.domain,
+          req.domain,
           ConnectError.UserRejected,
           4001,
         );
@@ -540,7 +583,7 @@ export class EvmService {
 
         if (wallet.walletType == WalletTypes.Ledger && sig) {
           const typedData = JSON.parse(
-            evmTypedData.signTypedDataJsonEVM.typedData,
+            req.typedData,
           );
           const verify = verifyTyped(sig, typedData, account.addr);
           if (!verify) {
@@ -558,15 +601,33 @@ export class EvmService {
 
 
           const typedData = JSON.parse(
-            evmTypedData.signTypedDataJsonEVM.typedData,
+            req.typedData,
           );
           const s = keyPair.signDataEIP712(typedData);
           signature = uint8ArrayToHex(s, true);
         }
 
+        const chainConfig =
+          this.#state.getChain(account.chainHash) ?? defaultChain;
+        wallet.history.push(
+          HistoricalTransaction.fromSignedMessage(
+            HistoricalTransaction.createSignedMessageMetadata(
+              account.chainHash,
+              req,
+              chainConfig.ftokens[0],
+            ),
+            {
+              kind: 'eip712',
+              address: req.address,
+              signature,
+              typedDataJson: req.typedData,
+            },
+          ),
+        );
+
         this.#sendSuccess(
           uuid,
-          evmTypedData.signTypedDataJsonEVM.domain,
+          req.domain,
           signature,
         );
       }

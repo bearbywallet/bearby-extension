@@ -299,7 +299,8 @@
     "thisWeek": "This Week",
     "thisMonth": "This Month",
     "clearAll": "Clear All",
-    "noTransactions": "No transaction history"
+    "noTransactions": "No transaction history",
+    "signedMessage": "Signed message"
   },
   "txDetails": {
     "title": "Transaction Details",
@@ -316,7 +317,19 @@
     "hash": "Transaction Hash",
     "gasUsed": "Gas Used",
     "gasPrice": "Gas Price",
-    "block": "Block Number"
+    "block": "Block Number",
+    "message": "Message",
+    "messageHash": "Message hash",
+    "signature": "Signature",
+    "signer": "Signer",
+    "dapp": "DApp",
+    "kind": "Type",
+    "signKind": {
+      "eth_sign": "eth_sign",
+      "personal_sign": "personal_sign",
+      "eip712": "EIP-712",
+      "scilla": "Scilla"
+    }
   },
   "walletSettings": {
     "title": "Wallet Settings",

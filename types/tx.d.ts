@@ -136,6 +136,16 @@ export interface TransactionMetadata {
   token: FTState;
 }
 
+export type SignedMessageKind = 'eth_sign' | 'personal_sign' | 'eip712' | 'scilla';
+
+export interface SignedMessageReceipt {
+  readonly kind: SignedMessageKind;
+  readonly address: string;
+  readonly signature: string;
+  readonly message?: string;
+  readonly typedDataJson?: string;
+}
+
 export interface SignMesageReqScilla {
   content: string;
   title: string;

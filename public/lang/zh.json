@@ -299,7 +299,8 @@
     "thisWeek": "本周",
     "thisMonth": "本月",
     "clearAll": "全部清除",
-    "noTransactions": "无交易历史"
+    "noTransactions": "无交易历史",
+    "signedMessage": "已签名消息"
   },
   "txDetails": {
     "title": "交易详情",
@@ -316,7 +317,19 @@
     "hash": "交易哈希",
     "gasUsed": "已使用 Gas",
     "gasPrice": "Gas 价格",
-    "block": "区块号"
+    "block": "区块号",
+    "message": "消息",
+    "messageHash": "消息哈希",
+    "signature": "签名",
+    "signer": "签名者",
+    "dapp": "DApp",
+    "kind": "类型",
+    "signKind": {
+      "eth_sign": "eth_sign",
+      "personal_sign": "personal_sign",
+      "eip712": "EIP-712",
+      "scilla": "Scilla"
+    }
   },
   "settings": {
     "notifications": "通知",

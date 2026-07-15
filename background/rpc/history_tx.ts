@@ -1,3 +1,4 @@
+import type { IFTokenState } from "background/storage";
 import { ZILLIQA } from "config/slip44";
 import { TransactionStatus } from "config/tx";
 import { Address } from "crypto/address";
@@ -5,7 +6,12 @@ import type { SignedTransaction } from "crypto/tx";
 import { chainIdFromVersion } from "crypto/zilliqa_tx";
 import { HEX_PREFIX, hexToUint8Array, uint8ArrayToHex } from "lib/utils/hex";
 import type { TxType } from "micro-eth-signer/core/tx-internal";
-import type { TransactionMetadata, TransactionReceiptEVM, TransactionReceiptScilla } from "types/tx";
+import type {
+  SignedMessageReceipt,
+  TransactionMetadata,
+  TransactionReceiptEVM,
+  TransactionReceiptScilla,
+} from "types/tx";
 
 export const typeMap: Record<string, TxType> = {
   '0x0': 'legacy',
@@ -20,11 +26,18 @@ export const typeMap: Record<string, TxType> = {
   '4': 'eip7702',
 };
 
+export interface SignedMessageDappMeta {
+  readonly domain?: string;
+  readonly title?: string;
+  readonly icon?: string;
+}
+
 export interface IHistoricalTransactionState {
   status: TransactionStatus;
   metadata: TransactionMetadata;
   evm?: TransactionReceiptEVM;
   scilla?: TransactionReceiptScilla;
+  signedMessage?: SignedMessageReceipt;
   timestamp: number;
 }
 
@@ -33,6 +46,7 @@ export class HistoricalTransaction implements IHistoricalTransactionState {
   metadata: TransactionMetadata;
   evm?: TransactionReceiptEVM;
   scilla?: TransactionReceiptScilla;
+  signedMessage?: SignedMessageReceipt;
   timestamp: number;
 
   constructor(data: IHistoricalTransactionState) {
@@ -40,6 +54,7 @@ export class HistoricalTransaction implements IHistoricalTransactionState {
     this.metadata = data.metadata;
     this.evm = data.evm;
     this.scilla = data.scilla;
+    this.signedMessage = data.signedMessage;
     this.timestamp = data.timestamp;
   }
 
@@ -49,8 +64,38 @@ export class HistoricalTransaction implements IHistoricalTransactionState {
       metadata: this.metadata,
       evm: this.evm,
       scilla: this.scilla,
+      signedMessage: this.signedMessage,
       timestamp: this.timestamp,
     };
+  }
+
+  static createSignedMessageMetadata(
+    chainHash: number,
+    dapp: SignedMessageDappMeta,
+    nativeToken: IFTokenState,
+  ): TransactionMetadata {
+    return {
+      chainHash,
+      domain: dapp.domain,
+      title: dapp.title || dapp.domain,
+      icon: dapp.icon,
+      token: {
+        ...nativeToken,
+        balances: undefined,
+      },
+    };
+  }
+
+  static fromSignedMessage(
+    metadata: TransactionMetadata,
+    signedMessage: SignedMessageReceipt,
+  ): HistoricalTransaction {
+    return new HistoricalTransaction({
+      status: TransactionStatus.Success,
+      metadata,
+      signedMessage,
+      timestamp: Date.now(),
+    });
   }
 
   static async fromSignedTransaction(

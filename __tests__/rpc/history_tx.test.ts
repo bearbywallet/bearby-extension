@@ -276,5 +276,81 @@ describe("HistoricalTransaction", () => {
       expect(historicalTx.evm!.logsBloom).toBeDefined();
     });
   });
+
+  describe("Signed messages", () => {
+    const metadata: TransactionMetadata = {
+      chainHash: BSC_CONFIG.hash(),
+      domain: "dapp.example.com",
+      title: "Example DApp",
+      icon: "https://dapp.example.com/icon.png",
+      token: {
+        ...BSC_CONFIG.ftokens[0],
+        balances: undefined,
+      },
+    };
+
+    it("fromSignedMessage produces Success entry with signedMessage", () => {
+      const signedMessage = {
+        kind: "personal_sign" as const,
+        address: "0x709678c07cfCAFB4bb49a6b1d57b1db378e27825",
+        signature: "0xabc123",
+        message: "hello world",
+      };
+
+      const historicalTx = HistoricalTransaction.fromSignedMessage(
+        metadata,
+        signedMessage,
+      );
+
+      expect(historicalTx.status).toBe(TransactionStatus.Success);
+      expect(historicalTx.signedMessage).toEqual(signedMessage);
+      expect(historicalTx.evm).toBeUndefined();
+      expect(historicalTx.scilla).toBeUndefined();
+      expect(historicalTx.metadata.domain).toBe("dapp.example.com");
+      expect(historicalTx.timestamp).toBeGreaterThan(0);
+    });
+
+    it("constructor and toJSON round-trip signedMessage", () => {
+      const signedMessage = {
+        kind: "eip712" as const,
+        address: "0x709678c07cfCAFB4bb49a6b1d57b1db378e27825",
+        signature: "0xdef456",
+        typedDataJson: JSON.stringify({
+          types: { Mail: [{ name: "contents", type: "string" }] },
+          primaryType: "Mail",
+          domain: { name: "Ether Mail", version: "1", chainId: 1 },
+          message: { contents: "hi" },
+        }),
+      };
+
+      const original = HistoricalTransaction.fromSignedMessage(
+        metadata,
+        signedMessage,
+      );
+      const json = original.toJSON();
+      const restored = new HistoricalTransaction(json);
+
+      expect(restored.signedMessage).toEqual(signedMessage);
+      expect(restored.status).toBe(TransactionStatus.Success);
+      expect(restored.metadata.domain).toBe(metadata.domain);
+      expect(restored.timestamp).toBe(original.timestamp);
+      expect(json.signedMessage).toEqual(signedMessage);
+    });
+
+    it("createSignedMessageMetadata builds token without balances", () => {
+      const meta = HistoricalTransaction.createSignedMessageMetadata(
+        BSC_CONFIG.hash(),
+        { domain: "a.com", title: "A", icon: "icon.png" },
+        BSC_CONFIG.ftokens[0],
+      );
+
+      expect(meta.chainHash).toBe(BSC_CONFIG.hash());
+      expect(meta.domain).toBe("a.com");
+      expect(meta.title).toBe("A");
+      expect(meta.icon).toBe("icon.png");
+      expect(meta.token.balances).toBeUndefined();
+      expect(meta.token.symbol).toBe(BSC_CONFIG.ftokens[0].symbol);
+    });
+  });
 });
 

@@ -299,7 +299,8 @@
     "thisWeek": "今週",
     "thisMonth": "今月",
     "clearAll": "すべてクリア",
-    "noTransactions": "取引履歴なし"
+    "noTransactions": "取引履歴なし",
+    "signedMessage": "署名済みメッセージ"
   },
   "txDetails": {
     "title": "取引詳細",
@@ -316,7 +317,19 @@
     "hash": "取引ハッシュ",
     "gasUsed": "使用ガス",
     "gasPrice": "ガス価格",
-    "block": "ブロック番号"
+    "block": "ブロック番号",
+    "message": "メッセージ",
+    "messageHash": "メッセージハッシュ",
+    "signature": "署名",
+    "signer": "署名者",
+    "dapp": "DApp",
+    "kind": "種類",
+    "signKind": {
+      "eth_sign": "eth_sign",
+      "personal_sign": "personal_sign",
+      "eip712": "EIP-712",
+      "scilla": "Scilla"
+    }
   },
   "walletSettings": {
     "title": "ウォレット設定",
